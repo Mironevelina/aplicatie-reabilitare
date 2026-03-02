@@ -1,0 +1,33 @@
+/* src/index.css */
+:root {
+  --sakura-pink: #ff6b81;
+  --sakura-light: #fff5f6;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--sakura-light);
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  display: block; /* Scoatem place-items: center care strânge totul la mijloc */
+}
+
+/* Animația spinner-ului */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinner-sakura {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 107, 129, 0.2);
+  border-top: 5px solid var(--sakura-pink);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
