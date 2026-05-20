@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import SakuraLayout from '../../layouts/SakuraLayout';
 import type { CSSProperties } from 'react';
 
@@ -15,9 +15,7 @@ interface Session {
   data_finalizare: string; 
   scor?: number;
   score?: number;
-  durata_secunde?: number; // Coloana ta din Supabase
-  durata?: number;
-  duration?: number;
+  durata_secunde?: number;
 }
 
 const PatientDetailsAdmin = () => {
@@ -32,14 +30,12 @@ const PatientDetailsAdmin = () => {
       try {
         setLoading(true);
         
-        // 1. Profil Pacient
         const { data: profile } = await supabase
           .from('pacienti')
           .select('*')
           .eq('id', id)
           .single();
 
-        // 2. Progres Pacient (ordonat cronologic pentru grafic)
         const { data: sess, error: sessError } = await supabase
           .from('progres_pacienti')
           .select('*')
@@ -61,10 +57,7 @@ const PatientDetailsAdmin = () => {
 
   const extractValues = (session: Session) => {
     const score = session.scor ?? session.score ?? 0;
-    
-    // Corecția pentru durata_secunde
-    const duration = session.durata_secunde ?? session.durata ?? session.duration ?? 0;
-    
+    const duration = session.durata_secunde ?? 0;
     const dateObj = new Date(session.data_finalizare);
     
     return {
@@ -81,15 +74,22 @@ const PatientDetailsAdmin = () => {
     };
   };
 
-  const chartData = sessions.map((s, index) => ({
-    name: `S${index + 1}`,
-    scor: extractValues(s).score,
-    dataLabel: extractValues(s).dateFormatted
-  }));
+  // Optimizare date grafic (Sampling pentru claritate dacă sunt multe sesiuni)
+  const chartData = sessions.length > 30 
+    ? sessions.filter((_, i) => i % Math.floor(sessions.length / 20) === 0).map((s, index) => ({
+        name: `S${index + 1}`,
+        scor: extractValues(s).score,
+        dataLabel: extractValues(s).dateFormatted
+      }))
+    : sessions.map((s, index) => ({
+        name: `S${index + 1}`,
+        scor: extractValues(s).score,
+        dataLabel: extractValues(s).dateFormatted
+      }));
 
   if (loading) return (
     <SakuraLayout>
-      <div style={centeredContainer}>🌸 Se încarcă istoricul clinic...</div>
+      <div style={centeredContainer}>Se accesează istoricul clinic al pacientului...</div>
     </SakuraLayout>
   );
 
@@ -98,68 +98,82 @@ const PatientDetailsAdmin = () => {
       <div style={pageContainer}>
         
         <button onClick={() => navigate('/admin/patients')} style={backButtonStyle}>
-          ← Înapoi la listă
+          ← Revenire la Lista Pacienților
         </button>
         
         <div style={headerCard}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div style={avatarCircle}>{patient?.full_name?.charAt(0) || 'P'}</div>
             <div>
-              <h1 style={titleStyle}>{patient?.full_name || 'Pacient'}</h1>
-              <p style={idSubtitle}>Panou Admin | Log: {id?.substring(0,8)}</p>
+              <h1 style={titleStyle}>{patient?.full_name || 'Profil Pacient'}</h1>
+              <p style={idSubtitle}>Identificator Sistem: {id?.substring(0,13).toUpperCase()}</p>
             </div>
           </div>
           <div style={summaryBadge}>
-            <p style={badgeLabel}>SESIUNI</p>
+            <p style={badgeLabel}>TOTAL SESIUNI</p>
             <p style={badgeValue}>{sessions.length}</p>
           </div>
         </div>
 
         <div style={chartCardStyle}>
-          <h3 style={sectionTitle}>📈 Evoluție Performanță</h3>
-          <div style={{ height: '300px', width: '100%' }}>
+          <h3 style={sectionTitle}>Monitorizare Progres Clinic (Scor Acuratețe)</h3>
+          <div style={{ height: '350px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorScor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ff8fa3" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#ff8fa3" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#fff0f3" vertical={false} />
-                <XAxis dataKey="name" stroke="#8a7d84" fontSize={12} />
-                <YAxis stroke="#8a7d84" fontSize={12} domain={[0, 100]} />
-                <Tooltip 
-                   contentStyle={{ borderRadius: '15px', border: 'none', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }}
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#94a3b8" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dy={10}
                 />
-                <Area type="monotone" dataKey="scor" stroke="#ff8fa3" strokeWidth={3} fill="url(#colorScor)" />
-              </AreaChart>
+                <YAxis 
+                  stroke="#94a3b8" 
+                  fontSize={11} 
+                  domain={[0, 100]} 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <Tooltip 
+                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="scor" 
+                  stroke="#4f46e5" 
+                  strokeWidth={3} 
+                  dot={chartData.length < 20} 
+                  activeDot={{ r: 6 }} 
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div style={listCardStyle}>
-          <h3 style={sectionTitle}>📋 Jurnal Detaliat</h3>
+          <h3 style={sectionTitle}>Registru Activități Detaliat</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[...sessions].reverse().map((s, idx) => {
+            {[...sessions].reverse().slice(0, 50).map((s, idx) => {
               const { score, duration, fullDate } = extractValues(s);
               return (
                 <div key={s.id || idx} style={sessionRow}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={sessionIndex}>{sessions.length - idx}</div>
+                    <div style={sessionIndex}>#{sessions.length - idx}</div>
                     <div>
-                      <div style={{ fontWeight: 800, color: '#4d444a' }}>{fullDate}</div>
-                      <div style={{ fontSize: '11px', color: '#8a7d84' }}>Sesiune finalizată</div>
+                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '14px' }}>{fullDate}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>Sesiune Monitorizată</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '30px' }}>
+                  <div style={{ display: 'flex', gap: '40px' }}>
                     <div style={metricBox}>
                       <p style={metricLabel}>DURATĂ</p>
                       <p style={metricValue}>{duration}s</p>
                     </div>
                     <div style={metricBox}>
-                      <p style={{ ...metricLabel, color: '#ff8fa3' }}>SCOR</p>
-                      <p style={{ ...metricValue, color: '#ff8fa3' }}>{score}%</p>
+                      <p style={{ ...metricLabel, color: score >= 70 ? '#059669' : '#e11d48' }}>SCOR</p>
+                      <p style={{ ...metricValue, color: score >= 70 ? '#059669' : '#e11d48' }}>{score}%</p>
                     </div>
                   </div>
                 </div>
@@ -172,24 +186,24 @@ const PatientDetailsAdmin = () => {
   );
 };
 
-// --- STILURI (Păstrate) ---
-const pageContainer: CSSProperties = { padding: '30px 40px', maxWidth: '1000px', margin: '0 auto' };
-const centeredContainer: CSSProperties = { height: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff8fa3', fontWeight: 900 };
-const backButtonStyle: CSSProperties = { marginBottom: '20px', cursor: 'pointer', background: 'white', border: '1px solid #ffeef2', color: '#8a7d84', padding: '8px 18px', borderRadius: '12px', fontWeight: 700 };
-const headerCard: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '25px', borderRadius: '25px', boxShadow: '0 10px 30px rgba(255, 183, 197, 0.1)', marginBottom: '30px', border: '1px solid #fff0f3' };
-const avatarCircle: CSSProperties = { width: '55px', height: '55px', borderRadius: '50%', backgroundColor: '#ffb7c5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 900 };
-const titleStyle: CSSProperties = { fontSize: '24px', fontWeight: 900, margin: 0, color: '#4d444a' };
-const idSubtitle: CSSProperties = { color: '#ff8fa3', fontSize: '13px', margin: '4px 0 0 0', fontWeight: 600 };
-const summaryBadge: CSSProperties = { backgroundColor: '#fff9fa', padding: '12px 20px', borderRadius: '18px', textAlign: 'center', border: '1px solid #fff0f3' };
-const badgeLabel: CSSProperties = { margin: 0, color: '#8a7d84', fontSize: '10px', fontWeight: 800 };
-const badgeValue: CSSProperties = { fontSize: '24px', fontWeight: 900, margin: 0, color: '#ff8fa3' };
-const chartCardStyle: CSSProperties = { backgroundColor: 'white', padding: '30px', borderRadius: '25px', boxShadow: '0 10px 30px rgba(255, 183, 197, 0.05)', marginBottom: '30px', border: '1px solid #fff0f3' };
-const sectionTitle: CSSProperties = { marginTop: 0, marginBottom: '20px', fontSize: '16px', color: '#4d444a', fontWeight: 800 };
-const listCardStyle: CSSProperties = { backgroundColor: 'white', borderRadius: '25px', border: '1px solid #fff0f3', padding: '25px' };
-const sessionRow: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', backgroundColor: '#fffcfd', borderRadius: '15px', border: '1px solid #fff0f3', marginBottom: '8px' };
-const sessionIndex: CSSProperties = { backgroundColor: '#ffeef2', color: '#ff8fa3', width: '30px', height: '30px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800 };
-const metricBox: CSSProperties = { textAlign: 'center', minWidth: '50px' };
-const metricLabel: CSSProperties = { margin: 0, fontSize: '9px', color: '#8a7d84', fontWeight: 800 };
-const metricValue: CSSProperties = { margin: 0, fontWeight: 900, fontSize: '16px', color: '#4d444a' };
+// --- STILURI ACTUALIZATE ---
+const pageContainer: CSSProperties = { padding: '40px', maxWidth: '1100px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh' };
+const centeredContainer: CSSProperties = { height: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontWeight: 600 };
+const backButtonStyle: CSSProperties = { marginBottom: '25px', cursor: 'pointer', background: 'white', border: '1px solid #e2e8f0', color: '#64748b', padding: '10px 20px', borderRadius: '10px', fontWeight: 600, fontSize: '13px' };
+const headerCard: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px', border: '1px solid #e2e8f0' };
+const avatarCircle: CSSProperties = { width: '60px', height: '60px', borderRadius: '12px', backgroundColor: '#4f46e5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', fontWeight: 800 };
+const titleStyle: CSSProperties = { fontSize: '24px', fontWeight: 800, margin: 0, color: '#0f172a' };
+const idSubtitle: CSSProperties = { color: '#94a3b8', fontSize: '13px', margin: '4px 0 0 0', fontWeight: 500, letterSpacing: '0.5px' };
+const summaryBadge: CSSProperties = { backgroundColor: '#f1f5f9', padding: '15px 25px', borderRadius: '12px', textAlign: 'center', border: '1px solid #e2e8f0' };
+const badgeLabel: CSSProperties = { margin: 0, color: '#64748b', fontSize: '10px', fontWeight: 700, letterSpacing: '1px' };
+const badgeValue: CSSProperties = { fontSize: '28px', fontWeight: 800, margin: 0, color: '#1e293b' };
+const chartCardStyle: CSSProperties = { backgroundColor: 'white', padding: '30px', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px', border: '1px solid #e2e8f0' };
+const sectionTitle: CSSProperties = { marginTop: 0, marginBottom: '25px', fontSize: '14px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' };
+const listCardStyle: CSSProperties = { backgroundColor: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '30px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' };
+const sessionRow: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 25px', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #f1f5f9', marginBottom: '10px' };
+const sessionIndex: CSSProperties = { backgroundColor: '#f1f5f9', color: '#64748b', width: '35px', height: '35px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700 };
+const metricBox: CSSProperties = { textAlign: 'center', minWidth: '70px' };
+const metricLabel: CSSProperties = { margin: 0, fontSize: '10px', color: '#94a3b8', fontWeight: 700, letterSpacing: '0.5px' };
+const metricValue: CSSProperties = { margin: 0, fontWeight: 800, fontSize: '18px', color: '#1e293b' };
 
 export default PatientDetailsAdmin;

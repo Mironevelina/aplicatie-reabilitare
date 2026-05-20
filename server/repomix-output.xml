@@ -1,0 +1,215 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+package.json
+src/config/supabase.ts
+src/index.ts
+src/lib/calcul-miscare.ts
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="package.json">
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.7",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}
+</file>
+
+<file path="src/config/supabase.ts">
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("EROARE: Lipsesc configurările Supabase în fișierul .env!");
+}
+
+// Creăm clientul cu cheia de Admin (Service Role)
+// Aceasta va fi folosită doar pe server!
+export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+</file>
+
+<file path="src/index.ts">
+import express from 'express';
+import type { Request, Response } from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { supabase } from './config/supabase.js';
+import { calculeazaUnghi } from './lib/calcul-miscare.ts';
+
+// Încărcăm variabilele de mediu
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors()); // Permite Frontend-ului să comunice cu Serverul
+app.use(express.json({ limit: '50mb' })); // Permite primirea de date JSON (mărit pentru landmarks)
+
+// 1. Ruta de Test pentru Server
+app.get('/', (req: Request, res: Response) => {
+  res.send('Serverul de Reabilitare funcționează și e gata de procesat date!');
+});
+
+// 2. Ruta de Test pentru Baza de Date
+app.get('/test-db', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase.from('pacienti').select('*').limit(1);
+    if (error) throw error;
+    res.json({ message: "Conexiune reușită la Supabase!", data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. RUTA PRINCIPALĂ: Procesarea Mișcării (MediaPipe)
+app.post('/proceseaza-exercitiu', async (req: Request, res: Response) => {
+  const { pacient_id, landmarks, tip_exercitiu } = req.body;
+
+  try {
+    // Verificăm dacă am primit datele corecte
+    if (!landmarks || landmarks.length < 16) {
+      return res.status(400).json({ error: "Date MediaPipe insuficiente." });
+    }
+
+    // Calculăm unghiul (Exemplu pentru cot: Umăr=11, Cot=13, Încheietură=15)
+    const unghi = calculeazaUnghi(landmarks[11], landmarks[13], landmarks[15]);
+    
+    // Logica de validare (exemplu simplu)
+    let este_corect = false;
+    if (tip_exercitiu === 'flexie_cot' && unghi < 60) {
+        este_corect = true;
+    }
+
+    // Salvare în baza de date dacă mișcarea a fost finalizată (exemplu)
+    if (este_corect) {
+        const { error } = await supabase
+            .from('progres_pacienti')
+            .insert([{ 
+                pacient_id: pacient_id, 
+                tip_exercitiu: tip_exercitiu, 
+                scor: Math.round(unghi),
+                data_finalizare: new Date().toISOString()
+            }]);
+        
+        if (error) throw error;
+    }
+
+    // Trimitem rezultatul înapoi la Frontend pentru feedback instant
+    res.json({ 
+        success: true, 
+        unghi: Math.round(unghi), 
+        este_corect,
+        mesaj: este_corect ? "Mișcare corectă!" : "Continuă flexia..."
+    });
+
+  } catch (error: any) {
+    console.error("Eroare procesare:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Serverul rulează pe: http://localhost:${PORT}`);
+});
+</file>
+
+<file path="src/lib/calcul-miscare.ts">
+export const calculeazaUnghi = (A: any, B: any, C: any): number => {
+    const radians = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
+    let angle = Math.abs((radians * 180.0) / Math.PI);
+    
+    if (angle > 180.0) angle = 360 - angle;
+    
+    return angle;
+};
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src/**/*"]
+}
+</file>
+
+</files>

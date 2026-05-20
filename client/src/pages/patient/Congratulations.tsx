@@ -1,22 +1,26 @@
-import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../supabaseClient';
-import confetti from 'canvas-confetti';
-import SakuraLayout from '../../layouts/SakuraLayout';
-import type { CSSProperties } from 'react';
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
+import confetti from "canvas-confetti";
+import SakuraLayout from "../../layouts/SakuraLayout";
+import type { CSSProperties } from "react";
 
-interface SessionData {
-  duration_seconds: number;
+// Interfață pentru datele din Supabase
+interface SessionRow {
+  durata_secunde: number;
+  created_at: string;
 }
 
 export default function Congratulations() {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Preluăm scorul trimis din pagina de exercițiu
+
+  // Preluăm scorul trimis din ExercisePage
   const finalScore = location.state?.finalScore || 0;
-  
-  const [feedback, setFeedback] = useState<string>("Se analizează progresul tău...");
+
+  const [feedback, setFeedback] = useState<string>(
+    "Se analizează progresul tău...",
+  );
   const [isProgress, setIsProgress] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -30,14 +34,14 @@ export default function Congratulations() {
         angle: 60,
         spread: 55,
         origin: { x: 0 },
-        colors: ['#ffb7c5', '#ff8fa3', '#ffffff']
+        colors: ["#ffb7c5", "#ff8fa3", "#ffffff"],
       });
       confetti({
         particleCount: 2,
         angle: 120,
         spread: 55,
         origin: { x: 1 },
-        colors: ['#ffb7c5', '#ff8fa3', '#ffffff']
+        colors: ["#ffb7c5", "#ff8fa3", "#ffffff"],
       });
 
       if (Date.now() < end) {
@@ -46,31 +50,45 @@ export default function Congratulations() {
     };
     frame();
 
+    // 2. Verificare evoluție față de sesiunea anterioară
     async function checkEvolution() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      // Preluăm ultimele 2 sesiuni pentru comparare
-      const { data } = await supabase.from('sessions')
-        .select('duration_seconds')
-        .eq('patient_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(2);
+        // REPARAT: Folosim 'data_finalizare' în loc de 'created_at'
+        const { data, error } = await supabase
+          .from("progres_pacienti")
+          .select("durata_secunde, data_finalizare") // Verifică dacă e data_finalizare
+          .eq("id_pacient", user.id)
+          .order("data_finalizare", { ascending: false }) // Sortăm după data reală
+          .limit(2);
 
-      if (data && data.length > 1) {
-        const currentSession = data[0] as SessionData;
-        const previousSession = data[1] as SessionData;
-        
-        // Dacă sesiunea curentă e mai scurtă decât precedenta, e progres
-        const diff = previousSession.duration_seconds - currentSession.duration_seconds;
-        setIsProgress(diff > 0);
-        setFeedback(diff > 0 
-          ? `🌸 Progres minunat! Ai fost mai rapid cu ${diff}s.` 
-          : `✨ Menține acest ritm constant pentru rezultate optime.`);
-      } else {
-        setFeedback("Prima sesiune salvată cu succes! Continuă tot așa.");
+        if (error) throw error;
+
+        if (data && data.length > 1) {
+          const currentSession = data[0];
+          const previousSession = data[1];
+
+          const diff = previousSession.durata_secunde - currentSession.durata_secunde;
+          
+          if (diff > 0) {
+            setIsProgress(true);
+            setFeedback(`🌸 Progres excelent! Ai terminat cu ${diff}s mai repede.`);
+          } else {
+            setIsProgress(false);
+            setFeedback(`✨ Efort constant! Menține acest ritm pentru rezultate pe termen lung.`);
+          }
+        } else {
+          setIsProgress(null);
+          setFeedback("Prima sesiune salvată! Acesta este începutul călătoriei tale.");
+        }
+      } catch (err) {
+        console.error("Eroare la calcularea evoluției:", err);
+        setFeedback("Sesiune finalizată cu succes!");
       }
     }
+
     checkEvolution();
   }, []);
 
@@ -80,37 +98,63 @@ export default function Congratulations() {
         <div style={cardStyle}>
           <div style={iconStyle}>🌸</div>
           <h2 style={titleStyle}>Felicitări!</h2>
-          
+
           <p style={subtitleStyle}>Ai finalizat sesiunea cu scorul:</p>
           <div style={scoreContainerStyle}>
             <span style={scoreTextStyle}>{finalScore}</span>
             <span style={percentStyle}>%</span>
           </div>
-          
-          <div style={{
-            ...feedbackBoxStyle,
-            borderColor: isProgress === true ? '#a7c9b0' : '#ffb7c5'
-          }}>
-            <p style={{ 
-              color: isProgress === true ? '#7fa98b' : '#ff8fa3', 
-              fontSize: '16px', 
-              fontWeight: 800, 
-              margin: 0 
-            }}>
+
+          <div
+            style={{
+              ...feedbackBoxStyle,
+              borderColor:
+                isProgress === true
+                  ? "#a7c9b0"
+                  : isProgress === false
+                    ? "#ffb7c5"
+                    : "#e2e8f0",
+              backgroundColor:
+                isProgress === true
+                  ? "#f0fdf4"
+                  : isProgress === false
+                    ? "#fff9fa"
+                    : "#f8fafc",
+            }}
+          >
+            <p
+              style={{
+                color:
+                  isProgress === true
+                    ? "#166534"
+                    : isProgress === false
+                      ? "#ff8fa3"
+                      : "#64748b",
+                fontSize: "16px",
+                fontWeight: 800,
+                margin: 0,
+              }}
+            >
               {feedback}
             </p>
           </div>
-          
+
           <div style={buttonGroupStyle}>
-            <button 
-              onClick={() => navigate('/progres')} 
+            <button
+              onClick={() => navigate("/progres")}
               style={primaryBtnStyle}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.backgroundColor = "#ff7a91")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.backgroundColor = "#ff8fa3")
+              }
             >
               📊 VEZI EVOLUȚIA COMPLETĂ
             </button>
-            
-            <button 
-              onClick={() => navigate('/dashboard')} 
+
+            <button
+              onClick={() => navigate("/dashboard")}
               style={secondaryBtnStyle}
             >
               Înapoi la Dashboard
@@ -122,101 +166,107 @@ export default function Congratulations() {
   );
 }
 
-// --- STILURI SAKURA ---
+// --- STILURI MODERATE PENTRU UN ASPECT PREMIUM ---
 const containerStyle: CSSProperties = {
-  height: '80vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '20px'
+  minHeight: "80vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "40px 20px",
 };
 
 const cardStyle: CSSProperties = {
-  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  backdropFilter: 'blur(20px)',
-  padding: '50px',
-  borderRadius: '40px',
-  textAlign: 'center',
-  border: '1px solid white',
-  width: '100%',
-  maxWidth: '480px',
-  boxShadow: '0 20px 50px rgba(255, 183, 197, 0.2)'
+  backgroundColor: "rgba(255, 255, 255, 0.95)",
+  backdropFilter: "blur(20px)",
+  padding: "50px",
+  borderRadius: "40px",
+  textAlign: "center",
+  border: "1px solid rgba(255, 255, 255, 0.5)",
+  width: "100%",
+  maxWidth: "480px",
+  boxShadow: "0 25px 60px rgba(255, 183, 197, 0.25)",
 };
 
 const iconStyle: CSSProperties = {
-  fontSize: '70px',
-  marginBottom: '10px',
-  filter: 'drop-shadow(0 5px 10px rgba(255, 143, 163, 0.3))'
+  fontSize: "70px",
+  marginBottom: "15px",
+  filter: "drop-shadow(0 5px 15px rgba(255, 143, 163, 0.4))",
 };
 
 const titleStyle: CSSProperties = {
-  fontSize: '36px',
+  fontSize: "38px",
   fontWeight: 900,
-  marginBottom: '5px',
-  color: '#4d444a'
+  marginBottom: "5px",
+  color: "#1e293b",
+  letterSpacing: "-1px",
 };
 
 const subtitleStyle: CSSProperties = {
-  fontSize: '16px',
-  color: '#8a7d84',
-  marginBottom: '10px',
-  fontWeight: 600
+  fontSize: "16px",
+  color: "#64748b",
+  marginBottom: "10px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "1px",
 };
 
 const scoreContainerStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginBottom: '30px'
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: "35px",
 };
 
 const scoreTextStyle: CSSProperties = {
-  fontSize: '96px',
-  fontWeight: 900,
-  color: '#ff8fa3',
-  lineHeight: '1'
+  fontSize: "100px",
+  fontWeight: 950,
+  color: "#ff8fa3",
+  lineHeight: "1",
+  textShadow: "0 10px 20px rgba(255, 143, 163, 0.2)",
 };
 
 const percentStyle: CSSProperties = {
-  fontSize: '32px',
+  fontSize: "36px",
   fontWeight: 900,
-  color: '#ffb7c5',
-  marginLeft: '5px'
+  color: "#ffb7c5",
+  marginLeft: "8px",
 };
 
 const feedbackBoxStyle: CSSProperties = {
-  backgroundColor: '#fff9fa',
-  padding: '20px',
-  borderRadius: '24px',
-  marginBottom: '35px',
-  border: '2px solid'
+  padding: "24px",
+  borderRadius: "24px",
+  marginBottom: "40px",
+  border: "2px solid",
+  transition: "all 0.4s ease",
 };
 
 const buttonGroupStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '15px'
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
 };
 
 const primaryBtnStyle: CSSProperties = {
-  padding: '18px',
-  backgroundColor: '#ff8fa3',
-  color: 'white',
-  border: 'none',
-  borderRadius: '20px',
-  fontWeight: 900,
-  fontSize: '16px',
-  cursor: 'pointer',
-  boxShadow: '0 10px 20px rgba(255, 143, 163, 0.3)',
-  transition: '0.3s'
+  padding: "20px",
+  backgroundColor: "#ff8fa3",
+  color: "white",
+  border: "none",
+  borderRadius: "20px",
+  fontWeight: 800,
+  fontSize: "16px",
+  cursor: "pointer",
+  boxShadow: "0 12px 24px rgba(255, 143, 163, 0.3)",
+  transition: "all 0.3s ease",
 };
 
 const secondaryBtnStyle: CSSProperties = {
-  padding: '15px',
-  backgroundColor: 'transparent',
-  color: '#8a7d84',
-  border: '2px solid #ffeef2',
-  borderRadius: '20px',
+  padding: "18px",
+  backgroundColor: "white",
+  color: "#64748b",
+  border: "2px solid #f1f5f9",
+  borderRadius: "20px",
   fontWeight: 700,
-  cursor: 'pointer'
+  fontSize: "15px",
+  cursor: "pointer",
+  transition: "all 0.3s ease",
 };

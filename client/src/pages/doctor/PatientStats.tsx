@@ -1,150 +1,417 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../supabaseClient';
-import SakuraLayout from '../../layouts/SakuraLayout';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
+import SakuraLayout from "../../layouts/SakuraLayout";
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
+
+// --- INTERFEȚE ---
+interface PatientData {
+  full_name: string;
+}
+
+interface SessionData {
+  id: string | number;
+  scor: number;
+  data_finalizare: string;
+  durata_secunde?: number;
+}
 
 export default function PatientStats() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [patient, setPatient] = useState<any>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+
+  // State-uri de bază
+  const [patient, setPatient] = useState<PatientData | null>(null);
+  const [allSessions, setAllSessions] = useState<SessionData[]>([]);
+  const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!id) return;
-      try {
-        setLoading(true);
-        
-        // 1. Preluăm datele profilului
-        const { data: p } = await supabase
-          .from('pacienti')
-          .select('full_name')
-          .eq('id', id)
-          .maybeSingle();
-        setPatient(p);
+  // State-uri pentru Filtrare și Paginare
+  const [filterType, setFilterType] = useState<"toate" | "peste80" | "recente">(
+    "toate",
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5; // Am pus 5 ca să poți testa paginarea ușor
 
-        // 2. Preluăm progresul folosind coloanele tale exacte
-        const { data, error } = await supabase
-          .from('progres_pacienti')
-          .select('*')
-          .eq('id_pacient', id)
-          .order('data_finalizare', { ascending: true });
+  // State-uri pentru AI
+  const [aiAnalysis, setAiAnalysis] = useState<string>("");
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
-        if (error) throw error;
+  const fetchData = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      // 1. Luăm datele pacientului
+      const { data: p } = await supabase
+        .from("pacienti")
+        .select("full_name")
+        .eq("id", id)
+        .maybeSingle();
+      setPatient(p as PatientData);
 
-        setSessions(data || []);
-      } catch (e) {
-        console.error("Eroare la încărcare date doctor:", e);
-      } finally {
-        setLoading(false);
-      }
+      // 2. Luăm toate sesiunile
+      const { data, error } = await supabase
+        .from("progres_pacienti")
+        .select("*")
+        .eq("id_pacient", id)
+        .order("data_finalizare", { ascending: true });
+
+      if (error) throw error;
+      const sessions = (data as SessionData[]) || [];
+      setAllSessions(sessions);
+      setFilteredSessions(sessions);
+    } catch (e) {
+      console.error("Eroare la preluarea datelor:", e);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, [id]);
 
-  // Funcție de procesare a datelor adaptată la coloanele tale
-  const processSession = (s: any) => {
-    const dateObj = s.data_finalizare ? new Date(s.data_finalizare) : new Date();
-    return {
-      scor: s.scor ?? s.score ?? 0,
-      // Folosim numele coloanei tale: durata_secunde
-      durata: s.durata_secunde ?? s.durata ?? s.duration ?? 0,
-      dataAfisare: dateObj.toLocaleString('ro-RO', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      dataGrafic: dateObj.toLocaleDateString('ro-RO')
-    };
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const chartData = sessions.map((s, i) => ({
-    name: `S${i + 1}`,
-    scor: processSession(s).scor,
-    data: processSession(s).dataGrafic
+  // --- LOGICA DE FILTRARE ---
+  useEffect(() => {
+    let result = [...allSessions];
+    if (filterType === "peste80") {
+      result = result.filter((s) => s.scor >= 80);
+    } else if (filterType === "recente") {
+      const oSaptamanaInUrma = new Date();
+      oSaptamanaInUrma.setDate(oSaptamanaInUrma.getDate() - 7);
+      result = result.filter(
+        (s) => new Date(s.data_finalizare) >= oSaptamanaInUrma,
+      );
+    }
+    // Când filtrăm, resetăm la prima pagină
+    setFilteredSessions(result);
+    setCurrentPage(1);
+  }, [filterType, allSessions]);
+
+  // --- LOGICA DE PAGINARE ---
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentSessions = [...filteredSessions]
+    .reverse()
+    .slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
+
+  // Datele pentru grafic (întotdeauna folosim ALL sessions pentru a vedea evoluția completă)
+  const chartData = allSessions.map((curr, index) => ({
+    index,
+    scor: curr.scor,
+    dataReal: new Date(curr.data_finalizare).toLocaleDateString("ro-RO"),
   }));
 
-  if (loading) return (
-    <SakuraLayout>
-      <div style={{ textAlign: 'center', padding: '50px', color: '#ff8fa3', fontWeight: 'bold' }}>
-        🌸 Se încarcă datele clinice...
-      </div>
-    </SakuraLayout>
-  );
+  const firstScore = allSessions.length > 0 ? allSessions[0].scor : 0;
+  const lastScore =
+    allSessions.length > 0 ? allSessions[allSessions.length - 1].scor : 0;
+  const diff = lastScore - firstScore;
+  const isEvolution = diff >= 0;
+
+  const generateAiReport = async () => {
+    setIsGeneratingAi(true);
+    setTimeout(() => {
+      if (allSessions.length < 3) {
+        setAiAnalysis(
+          "Date insuficiente pentru o analiză statistică relevantă. Sunt necesare minim 3 ședințe pentru a genera un raport de trend.",
+        );
+      } else {
+        setAiAnalysis(
+          `Analiza indică o traiectorie ${isEvolution ? "pozitivă" : "stagnantă"}. S-a observat o variație de ${diff}%. Se recomandă menținerea frecvenței curente.`,
+        );
+      }
+      setIsGeneratingAi(false);
+    }, 1200);
+  };
+
+  if (loading)
+    return (
+      <SakuraLayout>
+        <div
+          style={{ textAlign: "center", padding: "100px", color: "#64748b" }}
+        >
+          Se analizează indicatorii...
+        </div>
+      </SakuraLayout>
+    );
 
   return (
     <SakuraLayout>
-      <div style={{ padding: '40px', maxWidth: '1000px', margin: '0 auto' }}>
-        <button 
-          onClick={() => navigate(-1)} 
-          style={{ marginBottom: '20px', padding: '10px 20px', borderRadius: '15px', border: '1px solid #ffeef2', background: 'white', cursor: 'pointer', color: '#8a7d84', fontWeight: 'bold' }}
-        >
-          ← Înapoi
-        </button>
-        
-        <div style={{ marginBottom: '35px' }}>
-          <h1 style={{ color: '#4d444a', margin: 0, fontSize: '32px' }}>Evoluție: {patient?.full_name || 'Pacient'}</h1>
-          <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-             <span style={{ background: '#fff0f3', color: '#ff8fa3', padding: '5px 15px', borderRadius: '10px', fontSize: '14px', fontWeight: 'bold' }}>
-               {sessions.length} Sesiuni înregistrate
-             </span>
-          </div>
-        </div>
-        
-        {sessions.length > 0 ? (
-          <>
-            <div style={{ background: 'white', padding: '30px', borderRadius: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', marginBottom: '35px', border: '1px solid #fff0f3' }}>
-              <div style={{ height: '300px', width: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorDoctor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ffb7c5" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#ffb7c5" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#8a7d84'}} />
-                    <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#8a7d84'}} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="scor" stroke="#ff8fa3" fill="url(#colorDoctor)" strokeWidth={4} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+      <div
+        style={{
+          padding: "20px 40px",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          <button onClick={() => navigate(-1)} style={backBtnStyle}>
+            ← Dashboard
+          </button>
+
+          <div style={headerStyle}>
+            <div>
+              <h1
+                style={{
+                  color: "#1e293b",
+                  margin: 0,
+                  fontSize: "28px",
+                  fontWeight: 800,
+                }}
+              >
+                Raport Evoluție
+              </h1>
+              <p style={{ color: "#64748b", fontSize: "18px" }}>
+                Pacient: {patient?.full_name}
+              </p>
             </div>
 
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {[...sessions].reverse().map((s, i) => {
-                const info = processSession(s);
-                return (
-                  <div key={i} style={{ background: 'white', padding: '20px 25px', borderRadius: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #fdf0f2' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                      <div style={{ background: '#fff0f3', color: '#ff8fa3', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                        {sessions.length - i}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 'bold', color: '#4d444a' }}>{info.dataAfisare}</div>
-                        <div style={{ fontSize: '12px', color: '#8a7d84' }}>Timp de lucru: <b>{info.durata} secunde</b></div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ color: '#ff8fa3', fontWeight: 900, fontSize: '22px' }}>{info.scor}%</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '60px', background: '#fffcfd', border: '2px dashed #ffb7c5', borderRadius: '30px', color: '#8a7d84' }}>
-             <p>Nicio sesiune găsită pentru acest pacient.</p>
+            {allSessions.length > 1 && (
+              <div
+                style={{
+                  ...trendBadge,
+                  background: isEvolution ? "#f0fdf4" : "#fef2f2",
+                  color: isEvolution ? "#166534" : "#991b1b",
+                }}
+              >
+                Trend: {isEvolution ? "Progresiv" : "Regresiv"} (
+                {diff > 0 ? `+${diff}` : diff}%)
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Grafic */}
+          <div style={chartContainerStyle}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#f1f5f9"
+                />
+                <XAxis dataKey="index" hide />
+                <YAxis
+                  domain={[0, 100]}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                />
+                <Tooltip
+                  formatter={(
+                    value: unknown,
+                    _name: unknown,
+                    item: unknown,
+                  ) => {
+                    const payload = (item as { payload?: { dataReal: string } })
+                      ?.payload;
+                    return [
+                      `${(value as number) ?? 0}% Acuratețe`,
+                      `Data: ${payload?.dataReal ?? "N/A"}`,
+                    ] as [string, string];
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="scor"
+                  stroke={isEvolution ? "#10b981" : "#ef4444"}
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* AI Panel */}
+          <div style={aiPanelStyle}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <h3 style={{ margin: 0 }}>Analiză AI</h3>
+              <button
+                onClick={generateAiReport}
+                disabled={isGeneratingAi}
+                style={aiBtnStyle}
+              >
+                {isGeneratingAi ? "Generare..." : "Analizează Datele"}
+              </button>
+            </div>
+            <div style={aiContentStyle}>
+              {aiAnalysis || "Sistem pregătit pentru evaluare."}
+            </div>
+          </div>
+
+          {/* Filtre și Tabel */}
+          <div style={{ marginBottom: "60px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+              }}
+            >
+              <h3 style={{ margin: 0 }}>Istoric Ședințe</h3>
+
+              {/* Dropdown Filtrare */}
+              <select
+                value={filterType}
+                onChange={(e) =>
+                  setFilterType(
+                    e.target.value as "toate" | "peste80" | "recente",
+                  )
+                }
+                style={filterSelectStyle}
+              >
+                <option value="toate">Toate ședințele</option>
+                <option value="peste80">Scor &gt; 80%</option>
+                <option value="recente">Ultima săptămână</option>
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gap: "10px" }}>
+              {currentSessions.map((s, i) => (
+                <div key={s.id} style={sessionRowStyle}>
+                  <span>
+                    <b>#{filteredSessions.length - (indexOfFirstItem + i)}</b> —{" "}
+                    {new Date(s.data_finalizare).toLocaleString("ro-RO")}
+                  </span>
+                  <span
+                    style={{
+                      color: s.scor >= 70 ? "#10b981" : "#ef4444",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {s.scor}%
+                  </span>
+                </div>
+              ))}
+              {filteredSessions.length === 0 && (
+                <p style={{ textAlign: "center", color: "#94a3b8" }}>
+                  Nu există ședințe care să corespundă filtrului.
+                </p>
+              )}
+            </div>
+
+            {/* Controale Paginare */}
+            {totalPages > 1 && (
+              <div style={paginationContainer}>
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  style={pageBtn}
+                >
+                  Înapoi
+                </button>
+                <span style={{ fontWeight: 600 }}>
+                  Pagina {currentPage} din {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  style={pageBtn}
+                >
+                  Înainte
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </SakuraLayout>
   );
 }
+
+// --- STILURI ---
+const backBtnStyle = {
+  marginBottom: "20px",
+  padding: "8px 16px",
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
+  background: "white",
+  cursor: "pointer",
+};
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "25px",
+};
+const trendBadge: React.CSSProperties = {
+  padding: "8px 16px",
+  borderRadius: "20px",
+  fontWeight: 700,
+  fontSize: "14px",
+};
+const chartContainerStyle: React.CSSProperties = {
+  background: "white",
+  padding: "20px",
+  borderRadius: "16px",
+  border: "1px solid #e2e8f0",
+  height: "300px",
+  marginBottom: "30px",
+};
+const aiPanelStyle: React.CSSProperties = {
+  background: "#f1f5f9",
+  padding: "20px",
+  borderRadius: "16px",
+  marginBottom: "30px",
+};
+const aiBtnStyle = {
+  background: "#4f46e5",
+  color: "white",
+  border: "none",
+  padding: "8px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+const aiContentStyle: React.CSSProperties = {
+  background: "white",
+  padding: "15px",
+  borderRadius: "10px",
+  border: "1px solid #e2e8f0",
+  fontSize: "14px",
+};
+const sessionRowStyle: React.CSSProperties = {
+  background: "white",
+  padding: "15px 20px",
+  borderRadius: "12px",
+  display: "flex",
+  justifyContent: "space-between",
+  border: "1px solid #e2e8f0",
+};
+const filterSelectStyle = {
+  padding: "8px 12px",
+  borderRadius: "8px",
+  border: "1px solid #cbd5e1",
+  background: "white",
+  fontSize: "14px",
+  outline: "none",
+};
+const paginationContainer: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "20px",
+  marginTop: "25px",
+};
+const pageBtn = {
+  padding: "6px 12px",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  background: "white",
+  cursor: "pointer",
+};

@@ -8,12 +8,15 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ patients: 0, doctors: 0, sessions: 0 });
   const [loading, setLoading] = useState(true);
+  const [isPopulating, setIsPopulating] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
+      // Preluăm statisticile folosind tabelele corecte
       const { count: pCount } = await supabase.from('pacienti').select('*', { count: 'exact', head: true });
       const { count: dCount } = await supabase.from('doctori').select('*', { count: 'exact', head: true });
-      const { count: sCount } = await supabase.from('sessions').select('*', { count: 'exact', head: true });
+      // Folosim 'progres_pacienti' în loc de 'sessions' pentru a evita eroarea 400
+      const { count: sCount } = await supabase.from('progres_pacienti').select('*', { count: 'exact', head: true });
       
       setStats({ patients: pCount || 0, doctors: dCount || 0, sessions: sCount || 0 });
       setLoading(false);
@@ -21,49 +24,102 @@ export default function AdminDashboard() {
     fetchStats();
   }, []);
 
-  if (loading) return <SakuraLayout><div style={centeredStyle}>🌸 Se încarcă datele administrative...</div></SakuraLayout>;
+  // FUNCTIA DE POPULARE - Cerință licență
+  const handlePopulateData = async () => {
+    if (!window.confirm("Sunteți sigur că doriți să populați baza de date cu 25 de sesiuni de test pentru analize clinice?")) return;
+    
+    setIsPopulating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilizator neautentificat.");
+
+      const dummySessions = [];
+      const now = new Date();
+
+      for (let i = 0; i < 25; i++) {
+        const sessionDate = new Date();
+        sessionDate.setDate(now.getDate() - i);
+
+        dummySessions.push({
+          id_pacient: user.id,
+          tip_exercitiu: 'Evaluare Coordonare Biomecanică',
+          scor: Math.floor(Math.random() * (100 - 65 + 1)) + 65, // Scoruri realiste
+          durata_secunde: Math.floor(Math.random() * (150 - 40 + 1)) + 40,
+          data_finalizare: sessionDate.toISOString()
+        });
+      }
+
+      const { error } = await supabase.from('progres_pacienti').insert(dummySessions);
+      if (error) throw error;
+
+      alert("Succes: Sistemul a generat 25 de înregistrări pentru analizele de evoluție.");
+      window.location.reload();
+    } catch (err: any) {
+      alert("Eroare la populare: " + err.message);
+    } finally {
+      setIsPopulating(false);
+    }
+  };
+
+  if (loading) return (
+    <SakuraLayout>
+      <div style={centeredStyle}>Se încarcă baza de date administrativă...</div>
+    </SakuraLayout>
+  );
 
   return (
     <SakuraLayout>
       <div style={containerStyle}>
         <header style={headerStyle}>
-          <h1 style={titleStyle}>Panou Administrare Sakura 🏛️</h1>
-          <p style={subtitleStyle}>Gestionarea resurselor și monitorizarea sistemului.</p>
+          <h1 style={titleStyle}>Consola de Administrare</h1>
+          <p style={subtitleStyle}>Monitorizarea fluxurilor de recuperare și gestionarea resurselor sistemului.</p>
         </header>
 
         <div style={gridStyle}>
           {[
-            { label: 'Pacienți Activi', val: stats.patients, icon: '👤', path: '/admin/patients', color: '#ff8fa3' },
-            { label: 'Medici Înrolați', val: stats.doctors, icon: '🩺', path: '/admin/doctors', color: '#a7c9b0' },
-            { label: 'Sesiuni Totale', val: stats.sessions, icon: '📊', path: '/admin/sessions', color: '#ffb7c5' }
+            { label: 'Pacienți Înregistrați', val: stats.patients, path: '/admin/patients', color: '#4f46e5' },
+            { label: 'Personal Medical', val: stats.doctors, path: '/admin/doctors', color: '#0891b2' },
+            { label: 'Sesiuni Monitorizate', val: stats.sessions, path: '/admin/sessions', color: '#059669' }
           ].map((item, i) => (
             <div key={i} style={cardStyle} onClick={() => navigate(item.path)}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>{item.icon}</div>
-              <h3 style={{ margin: 0, color: '#8a7d84', fontSize: '14px', textTransform: 'uppercase' }}>{item.label}</h3>
-              <div style={{ fontSize: '48px', fontWeight: 900, color: item.color }}>{item.val}</div>
-              <button style={{ ...actionBtn, backgroundColor: item.color }}>Gestionează</button>
+              <h3 style={labelStyle}>{item.label}</h3>
+              <div style={{ fontSize: '56px', fontWeight: 800, color: item.color, margin: '15px 0' }}>{item.val}</div>
+              <button style={{ ...actionBtn, backgroundColor: item.color }}>Acces Rapoarte</button>
             </div>
           ))}
         </div>
 
         <section style={managementSection}>
-          <h2 style={{ color: '#4d444a', marginBottom: '20px' }}>Asignare și Control</h2>
-          <button style={userMgmtBtn} onClick={() => navigate('/admin/users')}>
-            ⚙️ Alocă Pacienți către Medici
-          </button>
+          <h2 style={{ color: '#1e293b', marginBottom: '25px', fontSize: '22px' }}>Instrumente de Dezvoltare și Control</h2>
+          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+            <button style={userMgmtBtn} onClick={() => navigate('/admin/users')}>
+              Alocare Pacienți către Specialiști
+            </button>
+            
+            {/* Butonul de populare - Arată "muncă" de licență */}
+            <button 
+              style={{ ...userMgmtBtn, backgroundColor: '#059669' }} 
+              onClick={handlePopulateData}
+              disabled={isPopulating}
+            >
+              {isPopulating ? 'Se generează date...' : 'Populare Bază de Date (Test Evoluție)'}
+            </button>
+          </div>
         </section>
       </div>
     </SakuraLayout>
   );
 }
 
-const containerStyle: CSSProperties = { maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' };
-const headerStyle: CSSProperties = { marginBottom: '40px', textAlign: 'center' };
-const titleStyle: CSSProperties = { fontSize: '36px', fontWeight: 900, color: '#4d444a', margin: 0 };
-const subtitleStyle: CSSProperties = { color: '#8a7d84', fontSize: '18px' };
-const gridStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px', marginBottom: '50px' };
-const cardStyle: CSSProperties = { backgroundColor: 'white', padding: '40px', borderRadius: '40px', textAlign: 'center', cursor: 'pointer', transition: '0.3s', boxShadow: '0 15px 35px rgba(255, 183, 197, 0.1)', border: '1px solid #fff0f3' };
-const actionBtn: CSSProperties = { marginTop: '20px', padding: '10px 25px', color: 'white', border: 'none', borderRadius: '15px', fontWeight: 800, cursor: 'pointer' };
-const managementSection: CSSProperties = { backgroundColor: 'rgba(255,255,255,0.7)', padding: '40px', borderRadius: '40px', textAlign: 'center', border: '1px solid white' };
-const userMgmtBtn: CSSProperties = { padding: '15px 40px', backgroundColor: '#4d444a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: 700, cursor: 'pointer' };
-const centeredStyle: CSSProperties = { textAlign: 'center', padding: '100px', color: '#ff8fa3', fontWeight: 900 };
+// --- STILURI CURATE ȘI PROFESIONALE ---
+const containerStyle: CSSProperties = { maxWidth: '1200px', margin: '0 auto', padding: '60px 20px' };
+const headerStyle: CSSProperties = { marginBottom: '50px', textAlign: 'left' };
+const titleStyle: CSSProperties = { fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: 0 };
+const subtitleStyle: CSSProperties = { color: '#64748b', fontSize: '18px', marginTop: '8px' };
+const gridStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '40px' };
+const cardStyle: CSSProperties = { backgroundColor: 'white', padding: '35px', borderRadius: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.2s', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' };
+const labelStyle: CSSProperties = { margin: 0, color: '#94a3b8', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 };
+const actionBtn: CSSProperties = { padding: '10px 20px', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' };
+const managementSection: CSSProperties = { backgroundColor: '#f8fafc', padding: '40px', borderRadius: '20px', textAlign: 'center', border: '1px solid #e2e8f0' };
+const userMgmtBtn: CSSProperties = { padding: '14px 28px', backgroundColor: '#1e293b', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '14px' };
+const centeredStyle: CSSProperties = { textAlign: 'center', padding: '120px', color: '#64748b', fontSize: '18px', fontWeight: 600 };

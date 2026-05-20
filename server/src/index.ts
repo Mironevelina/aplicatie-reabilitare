@@ -1,35 +1,60 @@
 import express from 'express';
-import type { Request, Response } from 'express';
 import cors from 'cors';
-import { supabase } from './config/supabase.js'; // Atenție la .js la final
+import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+
+import exerciseRoutes from './routes/exerciseRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+// Verificare cheie API în consolă la pornire (fără să o afișăm pe toată din motive de securitate)
+if (!process.env.GEMINI_API_KEY) {
+  console.warn("⚠️ ATENȚIE: GEMINI_API_KEY nu este setată în fișierul .env!");
+}
 
-// Endpoint de test pentru baza de date
-app.get('/test-db', async (req: Request, res: Response) => {
-  try {
-    // Schimbăm 'profiles' cu 'pacienti' pentru că acesta există la tine
-    const { data, error } = await supabase.from('pacienti').select('*').limit(1);
-    
-    if (error) throw error;
-    
-    res.json({ 
-      message: "Conexiune reusita! Serverul vede tabelul pacienti.", 
-      data 
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Configurare Swagger
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API SakuraMotion',
+      version: '1.0.0',
+      description: 'Documentația endpoint-urilor pentru platforma de reabilitare',
+    },
+    servers: [{ url: `http://localhost:${PORT}` }],
+  },
+  apis: ['./src/routes/*.ts', './src/routes/*.js', './index.ts'], 
+};
 
-app.get('/', (req: Request, res: Response) => {
-  res.send('Serverul de Reabilitare funcționează și e gata de testat DB!');
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+
+// Middleware
+app.use(cors({
+  origin: 'http://localhost:5173',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+app.use(express.json({ limit: '50mb' }));
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+// Rute API
+app.use('/api/exercises', exerciseRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/admin', adminRoutes);
+
+app.get('/', (req, res) => {
+  res.send('Backend SakuraMotion Activ. Mergi la /api-docs pentru testare.');
 });
 
 app.listen(PORT, () => {
-  console.log(`Serverul rulează pe adresa: http://localhost:${PORT}`);
+  console.log(`🚀 Serverul rulează pe: http://localhost:${PORT}`);
+  console.log(`📝 Documentația Swagger: http://localhost:${PORT}/api-docs`);
 });
