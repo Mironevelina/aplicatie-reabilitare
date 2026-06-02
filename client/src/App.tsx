@@ -17,7 +17,7 @@ import AdminDoctors from './pages/admin/AdminDoctors';
 import PatientDetails from './pages/admin/PatientDetails';
 import UserManagement from './pages/admin/UserManagement';
 import DoctorDetails from './pages/admin/DoctorDetails';
-import AdminMessages from './pages/admin/AdminMessages'; // <-- Import nou pentru mesaje
+import AdminMessages from './pages/admin/AdminMessages';
 
 // Importuri Medic
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
@@ -28,14 +28,11 @@ import PatientDashboard from './pages/patient/PatientDashboard';
 import Congratulations from './pages/patient/Congratulations';
 import ExercisePage from './pages/patient/ExercisePage';
 import ProgressPage from './pages/patient/ProgressPage';
+import PinchExercisePage from "./pages/patient/PinchExercisePage";
 
 function App() {
   return (
     <Router>
-      {/* Sfat: SakuraLayout este deja folosit în interiorul fiecărei pagini (conform codului anterior).
-        Dacă dorești să îl pui aici global, ar trebui să înfășoare <Routes>, 
-        dar momentan paginile tale îl conțin deja individual.
-      */}
       <Routes>
         {/* --- PAGINI PUBLICE --- */}
         <Route path="/" element={<Home />} />
@@ -55,7 +52,7 @@ function App() {
         <Route path="/admin/users" element={<UserManagement />} />
         <Route path="/admin/pacient/:id" element={<PatientDetails />} />
         <Route path="/admin/doctor/:id" element={<DoctorDetails />} />
-        <Route path="/admin/messages" element={<AdminMessages />} /> {/* <-- Ruta pentru Inbox-ul Adminului */}
+        <Route path="/admin/messages" element={<AdminMessages />} />
 
         {/* --- RUTE MEDIC --- */}
         <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
@@ -67,6 +64,11 @@ function App() {
         <Route path="/felicitari" element={<Congratulations />} />
         <Route path="/progres" element={<ProgressPage />} />
         
+        {/* ALINIERE RUTE EXERCIȚII (Sincronizate perfect cu butoanele din Dashboard) */}
+        <Route path="/exercitiu-prindere" element={<PinchExercisePage />} />
+        <Route path="/exercitiu-traseu" element={<ExercisePage />} /> {/* Placeholder până îl creăm */}
+        <Route path="/exercitiu-degete" element={<ExercisePage />} /> {/* Placeholder până îl creăm */}
+
         {/* --- RUTE COMUNE (Logați) --- */}
         <Route path="/profil" element={<ProfilePage />} />
         

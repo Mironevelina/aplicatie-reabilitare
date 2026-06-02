@@ -84,6 +84,7 @@ export default function PatientDashboard() {
     <SakuraLayout>
       <div style={pageWrapper}>
         <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          
           {/* HEADER */}
           <header style={headerStyle}>
             <div>
@@ -94,21 +95,9 @@ export default function PatientDashboard() {
                 Monitorizarea progresului tău în timp real.
               </p>
             </div>
-            <button
-              onClick={() => navigate("/exercitiu")}
-              style={mainActionBtn}
-              onMouseOver={(e) =>
-                (e.currentTarget.style.backgroundColor = "#f472b6")
-              }
-              onMouseOut={(e) =>
-                (e.currentTarget.style.backgroundColor = "#ff8fa3")
-              }
-            >
-              + Sesiune Nouă
-            </button>
           </header>
 
-          {/* BANNER NOU: ANALIZA EVOLUTIE (Transformat în Buton Call-to-Action) */}
+          {/* BANNER: ANALIZA EVOLUTIE */}
           <div
             onClick={() => navigate("/progres")}
             onMouseEnter={() => setIsBtnHovered(true)}
@@ -127,13 +116,7 @@ export default function PatientDashboard() {
                 <h3 style={{ margin: 0, fontSize: "18px", color: "#4d444a" }}>
                   Analiza Completă a Evoluției
                 </h3>
-                <p
-                  style={{
-                    margin: "4px 0 0 0",
-                    fontSize: "14px",
-                    color: "#8a7d84",
-                  }}
-                >
+                <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#8a7d84" }}>
                   Consultă rapoartele detaliate și istoricul tău medical.
                 </p>
               </div>
@@ -152,13 +135,7 @@ export default function PatientDashboard() {
           {/* OBIECTIV SAPTAMANAL */}
           <section style={challengeBox}>
             <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "10px",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
                 <span style={labelBold}>Activitate Săptămânală</span>
                 <span style={progressText}>
                   {weeklyProgress} / {weeklyGoal} ședințe
@@ -169,15 +146,14 @@ export default function PatientDashboard() {
                   style={{
                     ...progressBarFill,
                     width: `${(weeklyProgress / weeklyGoal) * 100}%`,
-                    backgroundColor:
-                      weeklyProgress === weeklyGoal ? "#10b981" : "#ffb7c5",
+                    backgroundColor: weeklyProgress === weeklyGoal ? "#10b981" : "#ffb7c5",
                   }}
                 />
               </div>
             </div>
           </section>
 
-          {/* STATISTICI (Acum sunt doar două, mai aerisite) */}
+          {/* STATISTICI */}
           <div style={statsGrid}>
             <div style={{ ...statCard, borderLeft: "5px solid #ffb7c5" }}>
               <p style={statLabel}>Acuratețe Medie</p>
@@ -187,6 +163,73 @@ export default function PatientDashboard() {
             <div style={{ ...statCard, borderLeft: "5px solid #4f46e5" }}>
               <p style={statLabel}>Total Sesiuni</p>
               <h2 style={statValue}>{sessions.length}</h2>
+            </div>
+          </div>
+
+          {/* SECTIUNE: SELECTIE TOATE EXERCITIILE */}
+          <div style={exerciseSelectionBox}>
+            <h3 style={sectionTitle}>Programe de Recuperare Disponibile 🌸</h3>
+            <div style={exerciseGrid}>
+              
+              {/* Card Exercițiu 1 */}
+              <div style={exerciseCard}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Coordonare Forme</span>
+                  <span style={exerciseCardDesc}>Potrivirea figurilor geometrice prin translație pe ecran.</span>
+                </div>
+                <button onClick={() => navigate("/exercitiu")} style={startExerciseBtn}>
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 2 (CEL CU PROBLEME REPARAT ACUM) */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #a7c9b0" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Prindere Obiecte Virtuale</span>
+                  <span style={exerciseCardDesc}>Antrenarea motricității fine prin gestul de ciupire (Pinch).</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-prindere")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#a7c9b0" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#96b89f")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#a7c9b0")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 3 */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #8b5cf6" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Urmărire Traseu</span>
+                  <span style={exerciseCardDesc}>Controlul stabilității cinematice continue pe puncte de reper.</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-traseu")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#8b5cf6" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#7c4ee4")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#8b5cf6")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 4 */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #f59e0b" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Flexie Degete</span>
+                  <span style={exerciseCardDesc}>Monitorizarea amplitudinii articulare și a rigidității musculare.</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-degete")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#f59e0b" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#e08e07")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#f59e0b")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
             </div>
           </div>
 
@@ -201,17 +244,12 @@ export default function PatientDashboard() {
                     style={{
                       ...sessionRow,
                       backgroundColor: i % 2 === 0 ? "#ffffff" : "#fffbfc",
-                      borderBottom:
-                        i === sessions.length - 1
-                          ? "none"
-                          : "1px solid #fceef1",
+                      borderBottom: i === sessions.length - 1 ? "none" : "1px solid #fceef1",
                     }}
                   >
                     <div style={rowInfo}>
                       <div style={dateBadge}>
-                        {new Date(s.data_finalizare).toLocaleDateString(
-                          "ro-RO",
-                        )}
+                        {new Date(s.data_finalizare).toLocaleDateString("ro-RO")}
                       </div>
                       <span style={exerciseName}>{s.tip_exercitiu}</span>
                     </div>
@@ -235,6 +273,7 @@ export default function PatientDashboard() {
               )}
             </div>
           </div>
+
         </div>
       </div>
     </SakuraLayout>
@@ -242,185 +281,40 @@ export default function PatientDashboard() {
 }
 
 // --- STILURI SAKURA REFINED ---
-const pageWrapper: CSSProperties = {
-  padding: "40px 20px",
-  minHeight: "100vh",
-  background: "#fffcfd",
-};
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "35px",
-};
-const welcomeTitle: CSSProperties = {
-  fontSize: "28px",
-  fontWeight: 800,
-  color: "#4d444a",
-  margin: 0,
-};
-const welcomeSubtitle: CSSProperties = {
-  color: "#b2a4ac",
-  fontSize: "15px",
-  marginTop: "4px",
-};
+const pageWrapper: CSSProperties = { padding: "40px 20px", minHeight: "100vh", background: "#fffcfd" };
+const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "35px" };
+const welcomeTitle: CSSProperties = { fontSize: "28px", fontWeight: 800, color: "#4d444a", margin: 0 };
+const welcomeSubtitle: CSSProperties = { color: "#b2a4ac", fontSize: "15px", marginTop: "4px" };
 
-const mainActionBtn: CSSProperties = {
-  padding: "12px 24px",
-  background: "#ff8fa3",
-  color: "white",
-  border: "none",
-  borderRadius: "15px",
-  fontWeight: 700,
-  fontSize: "15px",
-  cursor: "pointer",
-  transition: "all 0.2s ease",
-  boxShadow: "0 4px 12px rgba(255, 143, 163, 0.3)",
-};
+const analysisBanner: CSSProperties = { background: "linear-gradient(90deg, #fff 0%, #fff5f7 100%)", padding: "24px", borderRadius: "20px", border: "1px solid #ffdae1", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: "25px", transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)" };
+const analysisIconBox: CSSProperties = { width: "50px", height: "50px", backgroundColor: "#fff", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", boxShadow: "0 2px 8px rgba(255, 143, 163, 0.1)" };
+const arrowCircle: CSSProperties = { width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold", transition: "all 0.3s ease", border: "1px solid #ffdae1" };
 
-const analysisBanner: CSSProperties = {
-  background: "linear-gradient(90deg, #fff 0%, #fff5f7 100%)",
-  padding: "24px",
-  borderRadius: "20px",
-  border: "1px solid #ffdae1",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  cursor: "pointer",
-  marginBottom: "25px",
-  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-};
+const challengeBox: CSSProperties = { background: "#ffffff", padding: "20px", borderRadius: "20px", marginBottom: "25px", border: "1px solid #fceef1" };
+const progressBarTrack: CSSProperties = { height: "8px", background: "#fceef1", borderRadius: "4px", overflow: "hidden" };
+const progressBarFill: CSSProperties = { height: "100%", borderRadius: "4px", transition: "width 1s ease-out" };
 
-const analysisIconBox: CSSProperties = {
-  width: "50px",
-  height: "50px",
-  backgroundColor: "#fff",
-  borderRadius: "12px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "24px",
-  boxShadow: "0 2px 8px rgba(255, 143, 163, 0.1)",
-};
+const statsGrid: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" };
+const statCard: CSSProperties = { background: "white", padding: "24px", borderRadius: "20px", border: "1px solid #fceef1", boxShadow: "0 2px 10px rgba(0,0,0,0.01)" };
+const statLabel: CSSProperties = { color: "#b2a4ac", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" };
+const statValue: CSSProperties = { fontSize: "32px", fontWeight: 800, color: "#4d444a", margin: "8px 0 0 0" };
 
-const arrowCircle: CSSProperties = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "18px",
-  fontWeight: "bold",
-  transition: "all 0.3s ease",
-  border: "1px solid #ffdae1",
-};
+const exerciseSelectionBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1", marginBottom: "30px" };
+const exerciseGrid: CSSProperties = { display: "flex", flexDirection: "column", gap: "14px", marginTop: "15px" };
+const exerciseCard: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", backgroundColor: "#fffafb", border: "1px solid #ffeef2", borderTop: "4px solid #ff8fa3", borderRadius: "14px" };
+const exerciseCardTitle: CSSProperties = { fontWeight: 800, color: "#4d444a", fontSize: "16px" };
+const exerciseCardDesc: CSSProperties = { color: "#8a7d84", fontSize: "13px" };
+const startExerciseBtn: CSSProperties = { padding: "10px 20px", backgroundColor: "#ff8fa3", color: "white", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "14px", cursor: "pointer", transition: "all 0.2s" };
 
-const challengeBox: CSSProperties = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "20px",
-  marginBottom: "25px",
-  border: "1px solid #fceef1",
-};
-
-const progressBarTrack: CSSProperties = {
-  height: "8px",
-  background: "#fceef1",
-  borderRadius: "4px",
-  overflow: "hidden",
-};
-const progressBarFill: CSSProperties = {
-  height: "100%",
-  borderRadius: "4px",
-  transition: "width 1s ease-out",
-};
-
-const statsGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "20px",
-  marginBottom: "30px",
-};
-const statCard: CSSProperties = {
-  background: "white",
-  padding: "24px",
-  borderRadius: "20px",
-  border: "1px solid #fceef1",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.01)",
-};
-
-const statLabel: CSSProperties = {
-  color: "#b2a4ac",
-  fontSize: "12px",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-const statValue: CSSProperties = {
-  fontSize: "32px",
-  fontWeight: 800,
-  color: "#4d444a",
-  margin: "8px 0 0 0",
-};
-
-const activityBox: CSSProperties = {
-  background: "white",
-  borderRadius: "20px",
-  padding: "24px",
-  border: "1px solid #fceef1",
-};
-const sectionTitle: CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 800,
-  color: "#4d444a",
-  marginBottom: "20px",
-};
-const listWrapper: CSSProperties = {
-  borderRadius: "15px",
-  overflow: "hidden",
-  border: "1px solid #fceef1",
-};
-const sessionRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "14px 18px",
-};
-const rowInfo: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "15px",
-};
-const dateBadge: CSSProperties = {
-  background: "#fff5f7",
-  color: "#ff8fa3",
-  padding: "4px 10px",
-  borderRadius: "8px",
-  fontSize: "12px",
-  fontWeight: 700,
-};
+const activityBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1" };
+const sectionTitle: CSSProperties = { fontSize: "18px", fontWeight: 800, color: "#4d444a", margin: 0 };
+const listWrapper: CSSProperties = { borderRadius: "15px", overflow: "hidden", border: "1px solid #fceef1", marginTop: "15px" };
+const sessionRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" };
+const rowInfo: CSSProperties = { display: "flex", alignItems: "center", gap: "15px" };
+const dateBadge: CSSProperties = { background: "#fff5f7", color: "#ff8fa3", padding: "4px 10px", borderRadius: "8px", fontSize: "12px", fontWeight: 700 };
 const exerciseName: CSSProperties = { fontWeight: 600, color: "#4d444a" };
-const scoreBadge: CSSProperties = {
-  fontWeight: 800,
-  fontSize: "14px",
-  padding: "6px 12px",
-  borderRadius: "10px",
-};
-
-const emptyState: CSSProperties = {
-  textAlign: "center",
-  padding: "40px",
-  color: "#b2a4ac",
-};
+const scoreBadge: CSSProperties = { fontWeight: 800, fontSize: "14px", padding: "6px 12px", borderRadius: "10px" };
+const emptyState: CSSProperties = { textAlign: "center", padding: "40px", color: "#b2a4ac" };
 const centeredStyle: CSSProperties = { textAlign: "center", marginTop: "30vh" };
-const labelBold: CSSProperties = {
-  fontWeight: 700,
-  color: "#8a7d84",
-  fontSize: "14px",
-};
-const progressText: CSSProperties = {
-  fontWeight: 800,
-  color: "#ffb7c5",
-  fontSize: "14px",
-};
+const labelBold: CSSProperties = { fontWeight: 700, color: "#8a7d84", fontSize: "14px" };
+const progressText: CSSProperties = { fontWeight: 800, color: "#ffb7c5", fontSize: "14px" };

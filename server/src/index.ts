@@ -1,12 +1,15 @@
+import dotenv from 'dotenv';
+dotenv.config(); // <-- OBLIGATORIU PE LINIA 2, înainte de orice import de rută!
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 
 import exerciseRoutes from './routes/exerciseRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+
 
 dotenv.config();
 
@@ -29,7 +32,7 @@ const swaggerOptions = {
     },
     servers: [{ url: `http://localhost:${PORT}` }],
   },
-  apis: ['./src/routes/*.ts', './src/routes/*.js', './index.ts'], 
+  apis: [], 
 };
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);

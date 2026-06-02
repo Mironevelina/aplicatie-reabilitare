@@ -207,6 +207,7 @@ export default defineConfig([
     "@mediapipe/hands": "^0.4.1675469240",
     "@supabase/supabase-js": "^2.95.3",
     "canvas-confetti": "^1.9.4",
+    "framer-motion": "^12.39.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.564.0",
@@ -7434,55 +7435,51 @@ export default function ExercisePage() {
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  const handleFinish = useCallback(async () => {
-    if (isSaving || isFinishedRef.current) return;
-    setIsSaving(true);
-    isFinishedRef.current = true;
+ const handleFinish = useCallback(async () => {
+  if (isSaving || isFinishedRef.current) return;
+  setIsSaving(true);
+  isFinishedRef.current = true;
+  stopCamera();
 
-    stopCamera();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Utilizator neautentificat");
 
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sesiune expirată. Autentifică-te din nou.");
+    const endTime = Date.now();
+    const start = startTimeRef.current || endTime;
+    const duration = Math.floor((endTime - start) / 1000);
 
-      const endTime = Date.now();
-      const start = startTimeRef.current || endTime;
-      const durationInSeconds = Math.floor((endTime - start) / 1000);
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const sessionData = {
+      id_pacient: user.id,          // Sincronizat cu backend/tabel
+      tip_exercitiu: "Coordonare Forme",
+      scor: scoreRef.current,        // Sincronizat cu backend/tabel
+      durata_secunde: duration
+    };
 
-      // CONSTRUCȚIE BODY (Sincronizat cu backend-ul tău)
-      const sessionData = {
-        id_pacient: user.id, // Sincronizat cu id_pacient din backend
-        tip_exercitiu: "Coordonare Forme Geometrice",
-        scor: scoreRef.current, // Sincronizat cu coloana 'scor'
-        durata_secunde: durationInSeconds,
-        landmarks: [], // Trimitem array gol pentru a trece de validările opționale
-      };
+    const response = await fetch(`${API_URL}/api/exercises/proceseaza`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sessionData),
+    });
 
-      const response = await fetch(`${API_URL}/api/exercises/proceseaza`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sessionData),
-      });
+    const result = await response.json();
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Eroare la salvarea pe server.");
-      }
-
-      navigate("/felicitari", { state: { finalScore: scoreRef.current } });
-    } catch (error: any) {
-      console.error("Eroare Salvare:", error.message);
-      alert(`Atenție: Datele nu au putut fi salvate. ${error.message}`);
-      navigate("/felicitari", { state: { finalScore: scoreRef.current } });
-    } finally {
-      setIsSaving(false);
+    if (!response.ok) {
+      throw new Error(result.error || "Eroare la comunicarea cu serverul");
     }
-  }, [isSaving, navigate, stopCamera]);
+
+    navigate("/felicitari", { state: { finalScore: scoreRef.current } });
+  } catch (error: any) {
+    console.error("Eroare la finalizare:", error.message);
+    // Alertă pentru debug - poți să o scoți la prezentare
+    alert(`Eroare salvare: ${error.message}`);
+    navigate("/felicitari", { state: { finalScore: scoreRef.current } });
+  } finally {
+    setIsSaving(false);
+  }
+}, [isSaving, navigate, stopCamera]);
 
   const handleCancel = () => {
     stopCamera();
@@ -8225,78 +8222,331 @@ const progressText: CSSProperties = {
 </file>
 
 <file path="client/src/pages/patient/ProgressPage.tsx">
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import SakuraLayout from '../../layouts/SakuraLayout';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import type { CSSProperties } from 'react';
 
-export default function CereriDoctori() {
-  const [cereri, setCereri] = useState<any[]>([]);
+interface SessionData { date: string; scor: number; timestamp: Date; }
+type FilterType = 'zile' | 'saptamani' | 'luni';
+
+interface CerereDoctor {
+  id: string;
+  id_medic: string; // Sincronizat perfect cu poza ta din Supabase
+  nume_doctor: string;
+}
+
+export default function ProgressPage() {
+  const [rawData, setRawData] = useState<SessionData[]>([]);
+  const [cereri, setCereri] = useState<CerereDoctor[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [filter, setFilter] = useState<FilterType>('zile');
+  const [analizaAI, setAnalizaAI] = useState<string>("");
+  const [loadingAI, setLoadingAI] = useState<boolean>(false);
+  const [userNume, setUserNume] = useState<string>("Pacient");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCereri();
+    async function fetchProgressAndRequests() {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          const numeIdentificat = user.user_metadata?.nume || user.user_metadata?.full_name || "Pacient";
+          setUserNume(numeIdentificat);
+
+          // 1. Încărcăm istoricul sesiunilor (id_pacient)
+          const { data: sessions, error } = await supabase
+            .from('progres_pacienti')
+            .select('data_finalizare, scor')
+            .eq('id_pacient', user.id)
+            .order('data_finalizare', { ascending: true });
+
+          if (error) throw error;
+
+          if (sessions) {
+            setRawData(sessions.map(s => ({
+              timestamp: new Date(s.data_finalizare),
+              date: new Date(s.data_finalizare).toLocaleDateString('ro-RO'),
+              scor: Number(s.scor)
+            })));
+          }
+
+          // 2. POTRIVIT PERFECT DUPĂ POZA TA: id_pacient și id_medic
+          const { data: relatiiData, error: relatiiError } = await supabase
+            .from('relatii_pacienti')
+            .select('id, id_medic') // Schimbat în id_medic conform tabelului tău real
+            .eq('id_pacient', user.id) // Schimbat în id_pacient
+            .eq('status', 'pending');
+
+          if (!relatiiError && relatiiData && relatiiData.length > 0) {
+            const cereriCuNume = await Promise.all(
+              relatiiData.map(async (r: any) => {
+                const { data: docData } = await supabase
+                  .from('doctori')
+                  .select('nume')
+                  .eq('id', r.id_medic) // Folosim id_medic
+                  .single();
+                return {
+                  id: r.id,
+                  id_medic: r.id_medic,
+                  nume_doctor: docData?.nume || "Medic Specialist"
+                };
+              })
+            );
+            setCereri(cereriCuNume);
+          }
+        }
+      } catch (err) {
+        console.error("Eroare ProgressPage:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProgressAndRequests();
   }, []);
 
-  const fetchCereri = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const chartData = useMemo(() => {
+    const groups: Record<string, { totalScor: number; count: number; label: string }> = {};
+    rawData.forEach(s => {
+      let key = "";
+      if (filter === 'zile') {
+        key = s.timestamp.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' });
+      } else if (filter === 'saptamani') {
+        const firstDayOfYear = new Date(s.timestamp.getFullYear(), 0, 1);
+        const pastDaysOfYear = (s.timestamp.getTime() - firstDayOfYear.getTime()) / 86400000;
+        key = `Săpt ${Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7)}`;
+      } else {
+        key = s.timestamp.toLocaleString('ro-RO', { month: 'short' });
+      }
 
-    const { data, error } = await supabase
-      .from('relatii_pacienti')
-      .select(`
-        id,
-        id_medic,
-        doctori (
-          full_name
-        )
-      `)
-      .eq('id_pacient', user.id)
-      .eq('status', 'pending');
-
-    if (data) setCereri(data);
-  };
+      if (!groups[key]) groups[key] = { totalScor: 0, count: 0, label: key };
+      groups[key].totalScor += s.scor; 
+      groups[key].count += 1;
+    });
+    return Object.values(groups).map(g => ({ name: g.label, scor: Math.round(g.totalScor/g.count) }));
+  }, [rawData, filter]);
 
   const gestioneazaCerere = async (idRelatie: string, statusNou: 'acceptat' | 'respins') => {
-    const { error } = await supabase
-      .from('relatii_pacienti')
-      .update({ status: statusNou })
-      .eq('id', idRelatie);
+    try {
+      const { error } = await supabase
+        .from('relatii_pacienti')
+        .update({ status: statusNou })
+        .eq('id', idRelatie);
 
-    if (!error) {
-      setCereri(prev => prev.filter(c => c.id !== idRelatie));
+      if (!error) {
+        setCereri(prev => prev.filter(c => c.id !== idRelatie));
+      }
+    } catch (err) {
+      console.error("Eroare la procesarea cererii:", err);
     }
   };
 
-  if (cereri.length === 0) return null;
+  const genereazaRaportAI = async () => {
+    if (rawData.length === 0) return;
+    setLoadingAI(true);
+    setAnalizaAI("");
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      const istoricSimplificat = rawData.map(s => ({
+        data: String(s.date),
+        scor_acuratete: Number(s.scor)
+      }));
+
+      const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pacientNume: String(userNume),
+          istoric: istoricSimplificat
+        })
+      });
+
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        // Citire directă a textului din răspunsul curat al serverului
+        setAnalizaAI(data.analysis || data.text || JSON.stringify(data));
+      } else {
+        setAnalizaAI(`Eroare de comunicare AI: ${data.message || "Verificați terminalul de backend."}`);
+      }
+    } catch (err) {
+      console.error("Eroare raport AI:", err);
+      setAnalizaAI("Eroare de rețea la conectarea cu serverul AI.");
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  const exportPDF = async () => {
+    const input = document.getElementById('report-content');
+    if (!input) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Raport_Evolutie_${new Date().toLocaleDateString()}.pdf`);
+    } catch (e) {
+      console.error("Eroare PDF:", e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (loading) return <SakuraLayout><div style={centeredStyle}>🌸 Generăm analizele...</div></SakuraLayout>;
 
   return (
-    <div style={containerStyle}>
-      {cereri.map(c => (
-        <div key={c.id} style={bannerStyle}>
-          <p style={{ margin: 0, fontWeight: '600' }}>
-            Doctorul {c.doctori?.full_name} solicită permisiunea de a vă monitoriza evoluția.
-          </p>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => gestioneazaCerere(c.id, 'acceptat')} style={acceptBtn}>Acceptă</button>
-            <button onClick={() => gestioneazaCerere(c.id, 'respins')} style={rejectBtn}>Respinge</button>
+    <SakuraLayout>
+      <div style={pageContainerStyle}>
+        
+        {/* Banner Solicitări Doctori */}
+        {cereri.length > 0 && (
+          <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+            {cereri.map(c => (
+              <div key={c.id} style={bannerDoctorStyle}>
+                <p style={{ margin: 0, fontWeight: 600, color: '#4d444a', fontSize: '15px' }}>
+                  Doctorul <span style={{ color: '#ff8fa3', fontWeight: 800 }}>{c.nume_doctor}</span> dorește să vă monitorizeze progresul și evoluția clinică.
+                </p>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => gestioneazaCerere(c.id, 'acceptat')} style={acceptBtnStyle}>Acceptă</button>
+                  <button onClick={() => gestioneazaCerere(c.id, 'respins')} style={rejectBtnStyle}>Respinge</button>
+                </div>
+              </div>
+            ))}
           </div>
+        )}
+
+        <header style={headerStyle}>
+          <div>
+            <h1 style={{ color: '#4d444a', fontWeight: 900, margin: 0 }}>Evoluția Ta 📈</h1>
+            <p style={{ color: '#8a7d84', margin: '4px 0 0 0' }}>Istoricul performanței tale în exerciții</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button onClick={exportPDF} style={exportBtnStyle}>
+              {exporting ? 'Se generează...' : 'Descărcare PDF'}
+            </button>
+            <button onClick={() => navigate('/dashboard')} style={backBtnStyle}>Înapoi</button>
+          </div>
+        </header>
+
+        <div id="report-content" style={reportContainerStyle}>
+          <div style={filterGroupStyle}>
+            {(['zile', 'saptamani', 'luni'] as FilterType[]).map(f => (
+              <button 
+                key={f} 
+                onClick={() => setFilter(f)} 
+                style={{ 
+                  ...filterBtnStyle, 
+                  backgroundColor: filter === f ? '#ff8fa3' : 'white', 
+                  color: filter === f ? 'white' : '#8a7d84',
+                  border: filter === f ? '1px solid #ff8fa3' : '1px solid #ffeef2'
+                }}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div style={chartCardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
+              <h3 style={{ color: '#ff8fa3', margin: 0, fontSize: '18px', fontWeight: 800 }}>Progres Acuratețe (%)</h3>
+              
+              {rawData.length > 0 && (
+                <button 
+                  onClick={genereazaRaportAI} 
+                  disabled={loadingAI} 
+                  style={aiTriggerBtnStyle}
+                >
+                  {loadingAI ? '🌸 Se analizează...' : '✨ Interpretare Clinică AI'}
+                </button>
+              )}
+            </div>
+
+            <div style={chartWrapperStyle}>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorScor" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ffb7c5" stopOpacity={0.6}/>
+                        <stop offset="95%" stopColor="#ffb7c5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#8a7d84', fontSize: 12}} />
+                    <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#8a7d84', fontSize: 12}} />
+                    <Tooltip contentStyle={{ borderRadius: '15px', border: 'none', boxShadow: '0 5px 15px rgba(0,0,0,0.05)' }} />
+                    <Area 
+                      type="monotone" 
+                      dataKey="scor" 
+                      stroke="#ff8fa3" 
+                      fillOpacity={1} 
+                      fill="url(#colorScor)" 
+                      strokeWidth={4} 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={emptyStateStyle}>Nu există date pentru perioada selectată.</div>
+              )}
+            </div>
+
+            {loadingAI && (
+              <div style={aiResponseBoxStyle}>
+                <div style={{ color: '#ff8fa3', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🌸</span> Inteligența Artificială evaluează trendurile pentru a identifica evoluția sau involuția stării motorii...
+                </div>
+              </div>
+            )}
+
+            {analizaAI && !loadingAI && (
+              <div style={aiResponseBoxStyle}>
+                <div style={{ fontWeight: 900, color: '#ff8fa3', marginBottom: '8px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🤖 Evaluare Inteligentă a Graficului:
+                </div>
+                <div style={{ lineHeight: '1.6', color: '#4d444a', whiteSpace: 'pre-line' }}>{analizaAI}</div>
+              </div>
+            )}
+          </div>
+
         </div>
-      ))}
-    </div>
+      </div>
+    </SakuraLayout>
   );
 }
 
-const containerStyle: React.CSSProperties = { marginBottom: '20px' };
-const bannerStyle: React.CSSProperties = { 
-  backgroundColor: '#fff', 
-  border: '1px solid #ff8fa3', 
-  padding: '15px 25px', 
-  borderRadius: '15px', 
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center',
-  boxShadow: '0 4px 12px rgba(255,143,163,0.1)'
-};
-const acceptBtn: React.CSSProperties = { backgroundColor: '#a7c9b0', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' };
-const rejectBtn: React.CSSProperties = { backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' };
+// --- STILURI ---
+const pageContainerStyle: CSSProperties = { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' };
+const centeredStyle: CSSProperties = { textAlign: 'center', padding: '100px', color: '#ff8fa3', fontWeight: 800 };
+const headerStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', width: '100%' };
+const reportContainerStyle: CSSProperties = { backgroundColor: 'white', padding: '35px', borderRadius: '40px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', gap: '25px', width: '100%', boxSizing: 'border-box' };
+const filterGroupStyle: CSSProperties = { display: 'flex', gap: '10px', marginBottom: '15px', justifyContent: 'center', width: '100%' };
+const chartCardStyle: CSSProperties = { backgroundColor: '#fffafb', padding: '25px', borderRadius: '25px', border: '1px solid #fff0f3', display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' };
+const chartWrapperStyle: CSSProperties = { position: 'relative', width: '100%', height: '380px', minWidth: '100%', display: 'block' };
+const filterBtnStyle: CSSProperties = { padding: '10px 25px', borderRadius: '15px', cursor: 'pointer', fontWeight: 800, transition: 'all 0.3s ease' };
+const exportBtnStyle: CSSProperties = { padding: '12px 25px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '15px', fontWeight: 800, cursor: 'pointer' };
+const backBtnStyle: CSSProperties = { padding: '12px 25px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '15px', fontWeight: 700, cursor: 'pointer' };
+const emptyStateStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8a7d84', fontStyle: 'italic', width: '100%' };
+
+const bannerDoctorStyle: CSSProperties = { backgroundColor: 'white', border: '1px solid #ff8fa3', padding: '15px 25px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(255,143,163,0.08)', width: '100%', boxSizing: 'border-box' };
+const acceptBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' };
+const rejectBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' };
+
+const aiTriggerBtnStyle: CSSProperties = { padding: '8px 16px', backgroundColor: '#ff8fa3', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s ease-in-out' };
+const aiResponseBoxStyle: CSSProperties = { marginTop: '20px', padding: '18px 20px', backgroundColor: 'white', borderRadius: '18px', border: '1px solid #ffeef2', color: '#4d444a', fontStyle: 'italic', fontSize: '14px', boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.01)', width: '100%', boxSizing: 'border-box' };
 </file>
 
 <file path="client/src/pages/shared/ContactPage.tsx">
@@ -10094,64 +10344,59 @@ export const proceseazaMesaj = async (req: Request, res: Response) => {
 </file>
 
 <file path="server/src/controllers/exerciseController.ts">
-import { Request, Response } from "express";
-import { supabase } from "../config/supabase.js";
+import { Request, Response } from 'express';
+import { supabase } from '../config/supabase.js';
 
+// Funcția 1: Procesare și Salvare (Cea apelată de ExercisePage)
 export const proceseazaExercitiu = async (req: Request, res: Response) => {
   const { id_pacient, tip_exercitiu, scor, durata_secunde } = req.body;
 
   try {
-    // Dacă primim scor, înseamnă că este o cerere de salvare a sesiunii
     if (scor !== undefined && scor !== null) {
       console.log("Salvare sesiune pentru pacientul:", id_pacient);
 
-      const { data, error } = await supabase.from("progres_pacienti").insert([
-        {
-          id_pacient: id_pacient,
-          tip_exercitiu: tip_exercitiu || "Coordonare Forme",
-          scor: scor,
-          durata_secunde: durata_secunde || 0,
-          data_finalizare: new Date().toISOString(),
-        },
-      ]);
+      const { data, error } = await supabase
+        .from('progres_pacienti')
+        .insert([{ 
+            id_pacient: id_pacient, 
+            tip_exercitiu: tip_exercitiu || "Coordonare Forme", 
+            scor: scor,
+            durata_secunde: durata_secunde || 0,
+            data_finalizare: new Date().toISOString()
+        }]);
 
       if (error) {
         console.error("Eroare Supabase la insert:", error.message);
         return res.status(400).json({ success: false, error: error.message });
       }
 
-      return res.json({
-        success: true,
-        message: "Sesiune salvată cu succes!",
-        data,
-      });
+      return res.json({ success: true, message: "Sesiune salvată cu succes!" });
     }
 
-    // Altfel, considerăm că este un apel de procesare live (dacă trimiți landmarks)
-    return res.json({
-      success: true,
-      message: "Date procesate (fără salvare)",
-    });
+    return res.json({ success: true, message: "Date primite (live)" });
+
   } catch (error: any) {
     console.error("Eroare Server Backend:", error.message);
-    res.status(500).json({ error: "Eroare internă la procesarea datelor" });
+    res.status(500).json({ error: "Eroare internă server" });
   }
 };
 
+// Funcția 2: Preluare Istoric (Cea care lipsea și cauza eroarea la pornire)
 export const getIstoricPacient = async (req: Request, res: Response) => {
-  const { id_pacient } = req.params;
-  try {
-    const { data, error } = await supabase
-      .from("progres_pacienti")
-      .select("*")
-      .eq("id_pacient", id_pacient)
-      .order("data_finalizare", { ascending: false });
+    const { id_pacient } = req.params;
+    try {
+        const { data, error } = await supabase
+            .from('progres_pacienti')
+            .select('*')
+            .eq('id_pacient', id_pacient)
+            .order('data_finalizare', { ascending: false });
 
-    if (error) throw error;
-    res.json(data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+        if (error) throw error;
+        res.json(data);
+    } catch (error: any) {
+        console.error("Eroare la preluare istoric:", error.message);
+        res.status(500).json({ error: error.message });
+    }
 };
 </file>
 
@@ -10187,7 +10432,7 @@ const swaggerOptions = {
     },
     servers: [{ url: `http://localhost:${PORT}` }],
   },
-  apis: ['./src/routes/*.ts', './src/routes/*.js', './index.ts'], 
+  apis: [], 
 };
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
@@ -10283,118 +10528,129 @@ export default router;
 
 <file path="server/src/routes/exerciseRoutes.ts">
 import { Router, Request, Response } from 'express';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { proceseazaExercitiu, getIstoricPacient } from '../controllers/exerciseController.js';
+import https from 'https';
 
 const router = Router();
 
-// Inițializare Gemini AI (Cheia trebuie să fie în fișierul .env)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
-/**
- * @swagger
- * /api/exercises/proceseaza:
- * post:
- * summary: Trimite rezultatele exercițiului și salvează scorul sesiunii
- * tags: [Exerciții]
- * requestBody:
- * required: true
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * pacient_id:
- * type: string
- * tip_exercitiu:
- * type: string
- * scor_obtinut:
- * type: number
- * durata_secunde:
- * type: number
- */
 router.post('/proceseaza', proceseazaExercitiu);
-
-/**
- * @swagger
- * /api/exercises/istoric/{id_pacient}:
- * get:
- * summary: Obține istoricul de antrenament al unui pacient
- * tags: [Exerciții]
- * parameters:
- * - in: path
- * name: id_pacient
- * required: true
- * schema:
- * type: string
- * responses:
- * 200:
- * description: Succes
- */
 router.get('/istoric/:id_pacient', getIstoricPacient);
 
-/**
- * @swagger
- * /api/exercises/analiza-ai:
- * post:
- * summary: Generează un raport clinic inteligent folosind Google Gemini
- * tags: [Exerciții]
- * requestBody:
- * required: true
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * pacientNume:
- * type: string
- * istoric:
- * type: array
- * items:
- * type: object
- * responses:
- * 200:
- * description: Analiză generată cu succes
- */
 router.post('/analiza-ai', async (req: Request, res: Response) => {
   try {
     const { pacientNume, istoric } = req.body;
 
     if (!istoric || istoric.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Date insuficiente pentru analiza AI." 
+      return res.status(400).json({
+        success: false,
+        message: "Date insuficiente pentru analiza AI."
       });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Cheia API Gemini nu este configurata in .env."
+      });
+    }
 
-    const prompt = `
-      Ești un expert în kinetoterapie și recuperare medicală. 
-      Analizează următoarele date de progres pentru pacientul ${pacientNume}:
-      ${JSON.stringify(istoric)}
+    // Transformăm istoricul într-un text plat, foarte curat, ușor de digerat de inteligența artificială
+    const istoricText = istoric
+      .map((s: any) => `Data: ${s.data || 'N/A'}, Acuratete: ${s.scor_acuratete || 0}%`)
+      .join('\n');
 
-      Cerințe pentru raport:
-      1. Evaluează evoluția scorului de acuratețe în timp.
-      2. Menționează dacă timpul de execuție (durata) s-a îmbunătățit.
-      3. Oferă o recomandare scurtă (ex: creșterea dificultății, focus pe viteză sau menținerea ritmului).
-      
-      Raportul trebuie să fie în limba română, să aibă maximum 4 rânduri și să folosească un ton profesional/clinic.
-    `;
+    const promptText = `
+Ești un expert clinician în kinetoterapie și reabilitare motorie neuro-musculară.
+Analizează evoluția istorică cronologică a pacientului ${pacientNume} pe baza următoarelor date din exerciții:
+${istoricText}
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+Cerințe pentru evaluarea de licență:
+1. Urmărește trendul datelor și precizează în mod explicit dacă se observă o EVOLUȚIE clinică (progres) sau o INVOLUȚIE (regres/stagnare a funcției motorii).
+2. Oferă o scurtă recomandare terapeutică utilă pentru recuperarea pacientului.
 
-    res.json({
-      success: true,
-      analysis: text
+Restricții vizuale:
+- Răspunsul trebuie redactat exclusiv în limba română.
+- Rezumatul trebuie să fie foarte concis (maxim 3 rânduri text), adaptat să apară curat sub un grafic.
+- Păstrează un ton academic și extrem de profesionist.
+`;
+
+    // Împachetăm corpul cererii conform specificației oficiale Google
+    const postData = JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: promptText
+            }
+          ]
+        }
+      ]
     });
-  } catch (error) {
-    console.error("Eroare Backend Gemini:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Eroare la procesarea inteligenței artificiale." 
+
+    const options = {
+      hostname: 'generativelanguage.googleapis.com',
+      port: 443,
+      path: `/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    // Apelul asincron asigurat de modulul https
+    const apiCall = () => {
+      return new Promise<string>((resolve, reject) => {
+        const reqGoogle = https.request(options, (resGoogle) => {
+          let body = '';
+          resGoogle.on('data', (chunk) => body += chunk);
+          resGoogle.on('end', () => resolve(body));
+        });
+
+        reqGoogle.on('error', (err) => reject(err));
+        reqGoogle.write(postData);
+        reqGoogle.end();
+      });
+    };
+
+    const rawResult = await apiCall();
+    
+    // Începem parsarea defensivă pentru a prinde orice variație de răspuns JSON de la Google
+    let data: any;
+    try {
+      data = JSON.parse(rawResult);
+    } catch (e) {
+      console.error("Eroare la parsarea JSON-ului brut de la Google:", rawResult);
+      throw new Error("Răspunsul primit de la Google nu este un JSON valid.");
+    }
+
+    // Extragere pe straturi sigure a textului generat de AI
+    let responseText = "";
+    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = data.candidates[0].content.parts[0].text;
+    } else if (data.error?.message) {
+      // Dacă Google ne-a întors o eroare structurată (ex: cheie invalidă sau cotă depășită)
+      throw new Error(`Google API Message: ${data.error.message}`);
+    } else {
+      console.log("Structură ciudată primită de la Google:", JSON.stringify(data));
+      responseText = "Analiza s-a finalizat, dar structura textului nu a putut fi citită direct.";
+    }
+
+    return res.json({
+      success: true,
+      analysis: responseText
+    });
+
+  } catch (error: any) {
+    console.error("=== EROARE CRITICĂ GEMINI BACKEND ===");
+    console.error(error.message || error);
+    console.error("=====================================");
+
+    return res.status(500).json({
+      success: false,
+      message: "Eroare la generarea interpretării AI.",
+      details: error.message || "Verificați terminalul de server."
     });
   }
 });
