@@ -29,7 +29,24 @@ import Congratulations from './pages/patient/Congratulations';
 import ExercisePage from './pages/patient/ExercisePage';
 import ProgressPage from './pages/patient/ProgressPage';
 import PinchExercisePage from "./pages/patient/PinchExercisePage";
+import {MazeExercisePage} from "./pages/patient/MazeExercisePage";
+import { FingersExercisePage } from "./pages/patient/FingersExercisePage";
 
+function RoleBasedRedirect() {
+  // Preluăm rolul utilizatorului (salvat la login în localStorage sau în contextul aplicației)
+  const userRole = localStorage.getItem('userRole'); 
+
+  if (userRole === 'admin') {
+    return <Navigate to="/admin" replace />;
+  } else if (userRole === 'doctor') {
+    return <Navigate to="/doctor-dashboard" replace />;
+  } else if (userRole === 'patient') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Dacă nu este găsit niciun rol valid, trimitem utilizatorul înapoi la Home
+  return <Navigate to="/" replace />;
+}
 function App() {
   return (
     <Router>
@@ -43,7 +60,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-
+       <Route path="/redirect" element={<RoleBasedRedirect />} />
         {/* --- RUTE ADMIN --- */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/sessions" element={<AdminSessions />} />
@@ -66,9 +83,8 @@ function App() {
         
         {/* ALINIERE RUTE EXERCIȚII (Sincronizate perfect cu butoanele din Dashboard) */}
         <Route path="/exercitiu-prindere" element={<PinchExercisePage />} />
-        <Route path="/exercitiu-traseu" element={<ExercisePage />} /> {/* Placeholder până îl creăm */}
-        <Route path="/exercitiu-degete" element={<ExercisePage />} /> {/* Placeholder până îl creăm */}
-
+        <Route path="/exercitiu-traseu" element={<MazeExercisePage />} />
+        <Route path="/exercitiu-degete" element={<FingersExercisePage />} />
         {/* --- RUTE COMUNE (Logați) --- */}
         <Route path="/profil" element={<ProfilePage />} />
         

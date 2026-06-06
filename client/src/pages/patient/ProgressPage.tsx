@@ -79,7 +79,7 @@ export default function ProgressPage() {
 
           if (!relatiiError && relatiiData && relatiiData.length > 0) {
             const cereriCuNume = await Promise.all(
-              relatiiData.map(async (r: any) => {
+              relatiiData.map(async (r: { id_medic: string; id: string }) => {
                 const { data: docData } = await supabase
                   .from('doctori')
                   .select('full_name') 
@@ -201,6 +201,47 @@ export default function ProgressPage() {
     }
   };
 
+  const formatAiReport = (text: string) => {
+    return text
+      .split('\n')
+      .filter((linie) => linie.trim().length > 0)
+      .map((linie, index) => {
+        const esteTitlu = /^\[.*\]$/.test(linie.trim());
+        const esteBullet = /^•\s*/.test(linie.trim());
+
+        return (
+          <div
+            key={`${linie}-${index}`}
+            style={{
+              marginBottom: '8px',
+              padding: esteBullet ? '8px 10px' : '6px 0',
+              borderRadius: '12px',
+              background: esteBullet ? 'linear-gradient(135deg, #fff7f9 0%, #ffffff 100%)' : 'transparent',
+              border: esteBullet ? '1px solid #ffe8ef' : 'none',
+              color: '#4d444a',
+              lineHeight: 1.6,
+            }}
+          >
+            {esteTitlu ? (
+              <strong style={{ color: '#ff8fa3', fontSize: '14px', display: 'block', marginBottom: '2px' }}>{linie.trim()}</strong>
+            ) : (
+              <span style={{ display: 'inline-block', paddingLeft: esteBullet ? '2px' : '0' }}>{linie.trim().replace(/^•\s*/, '')}</span>
+            )}
+          </div>
+        );
+      });
+  };
+
+  const getExerciseBadge = (tip: string) => {
+    const palette: Record<string, { bg: string; color: string }> = {
+      'Coordonare Forme': { bg: '#fff1f5', color: '#be185d' },
+      'Urmărire Traseu Labirint': { bg: '#eef2ff', color: '#4338ca' },
+      'Asamblare Cinematică Floare Sakura': { bg: '#ecfeff', color: '#0f766e' },
+      'Prindere Obiecte Virtuale': { bg: '#f0fdf4', color: '#15803d' },
+    };
+    return palette[tip] || { bg: '#fff7ed', color: '#c2410c' };
+  };
+
   const exportPDF = async () => {
     const input = document.getElementById('report-content');
     if (!input) return;
@@ -309,10 +350,16 @@ export default function ProgressPage() {
 
             {analizaAI && (
               <div style={aiResponseBoxStyle}>
-                <div style={{ fontWeight: 900, color: '#ff8fa3', marginBottom: '8px', fontSize: '14px' }}>
-                  🤖 Evaluare Inteligentă a Graficului:
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>🌸</span>
+                  <div>
+                    <div style={{ fontWeight: 900, color: '#ff8fa3', fontSize: '14px' }}>Raport clar și ușor de citit</div>
+                    <div style={{ fontSize: '12px', color: '#8a7d84', fontWeight: 600 }}>Rezumatul AI este prezentat în secțiuni simple, pentru o înțelegere rapidă.</div>
+                  </div>
                 </div>
-                <div style={{ lineHeight: '1.6', color: '#4d444a', whiteSpace: 'pre-line' }}>{analizaAI}</div>
+                <div style={{ lineHeight: '1.7', color: '#4d444a', whiteSpace: 'pre-line', wordBreak: 'break-word' }}>
+                  {formatAiReport(analizaAI)}
+                </div>
               </div>
             )}
           </div>
@@ -333,7 +380,7 @@ export default function ProgressPage() {
                   <option value="high">Scor mare (≥ 70%)</option>
                   <option value="low">Scor mic (&lt; 70%)</option>
                 </select>
-                <select value={ordonareData} onChange={(e) => setOrdonareData(e.target.value as any)} style={selectStyle}>
+                <select value={ordonareData} onChange={(e) => setOrdonareData(e.target.value as 'desc' | 'asc')} style={selectStyle}>
                   <option value="desc">Cele mai recente</option>
                   <option value="asc">Cele mai vechi</option>
                 </select>
@@ -354,12 +401,24 @@ export default function ProgressPage() {
                   {randuriPaginaCurenta.length > 0 ? (
                     randuriPaginaCurenta.map((sesiune) => (
                       <tr key={sesiune.id} style={trStyle}>
-                        <td style={tdStyle}>{sesiune.tip_exercitiu}</td>
                         <td style={tdStyle}>
                           <span style={{
-                            padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold',
-                            backgroundColor: sesiune.scor >= 70 ? '#e6f7ed' : '#fff3cd',
-                            color: sesiune.scor >= 70 ? '#1f7a42' : '#856404'
+                            ...badgeChip,
+                            backgroundColor: getExerciseBadge(sesiune.tip_exercitiu).bg,
+                            color: getExerciseBadge(sesiune.tip_exercitiu).color,
+                          }}>
+                            {sesiune.tip_exercitiu}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={{
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            backgroundColor: '#fff7f9',
+                            color: '#ff8fa3',
+                            border: '1px solid #ffeef2'
                           }}>
                             {sesiune.scor}%
                           </span>
@@ -419,7 +478,23 @@ const bannerDoctorStyle: CSSProperties = { backgroundColor: 'white', border: '1p
 const acceptBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 800, cursor: 'pointer' };
 const rejectBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '10px', fontWeight: 700, cursor: 'pointer' };
 const aiTriggerBtnStyle: CSSProperties = { padding: '8px 16px', backgroundColor: '#ff8fa3', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer' };
-const aiResponseBoxStyle: CSSProperties = { marginTop: '20px', padding: '18px 20px', backgroundColor: 'white', borderRadius: '18px', border: '1px solid #ffeef2', fontStyle: 'italic' };
+const aiResponseBoxStyle: CSSProperties = {
+  marginTop: '20px',
+  padding: '18px 20px',
+  background: 'linear-gradient(135deg, #fff 0%, #fff7f9 100%)',
+  borderRadius: '18px',
+  border: '1px solid #ffeef2',
+  boxShadow: '0 10px 25px rgba(255, 143, 163, 0.08)'
+};
+const badgeChip: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 10px',
+  borderRadius: '999px',
+  fontSize: '12px',
+  fontWeight: 800,
+  border: '1px solid transparent'
+};
 const tabelSectiuneStyle: CSSProperties = { marginTop: '15px', display: 'flex', flexDirection: 'column' };
 const tabelFiltreHeaderStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '15px' };
 const selectStyle: CSSProperties = { padding: '8px 12px', borderRadius: '10px', border: '1px solid #ffeef2', backgroundColor: 'white', fontWeight: 'bold', outline: 'none' };

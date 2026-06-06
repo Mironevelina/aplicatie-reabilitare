@@ -13,6 +13,7 @@
     "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/hands": "^0.4.1675469240",
     "@supabase/supabase-js": "^2.95.3",
+    "axios": "^1.17.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^12.39.0",
     "html2canvas": "^1.4.1",

@@ -18,6 +18,11 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [isBtnHovered, setIsBtnHovered] = useState(false);
 
+  // --- STĂRI PENTRU FILTRARE ȘI PAGINARE ---
+  const [activeFilter, setActiveFilter] = useState<string>("Toate");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const sessionsPerPage = 5; // Afișează exact 5 sesiuni pe pagină
+
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
@@ -52,6 +57,7 @@ export default function PatientDashboard() {
     fetchPatientData();
   }, []);
 
+  // Calcul acuratețe medie globală
   const avgScore =
     sessions.length > 0
       ? Math.round(
@@ -59,6 +65,7 @@ export default function PatientDashboard() {
         )
       : 0;
 
+  // Scop săptămânal
   const weeklyGoal = 5;
   const weeklyProgress = Math.min(
     sessions.filter((s) => {
@@ -68,6 +75,27 @@ export default function PatientDashboard() {
     }).length,
     weeklyGoal,
   );
+
+  // --- LOGICĂ FILTRARE ȘI PAGINARE ---
+  // 1. Filtrăm sesiunile în funcție de butonul selectat
+  const filteredSessions = sessions.filter((session) => {
+    if (activeFilter === "Toate") return true;
+    return session.tip_exercitiu.toLowerCase().includes(activeFilter.toLowerCase());
+  });
+
+  // Resetează pagina curentă la 1 când utilizatorul schimbă filtrul
+  const handleFilterChange = (filterName: string) => {
+    setActiveFilter(filterName);
+    setCurrentPage(1);
+  };
+
+  // 2. Calculăm indecșii pentru felierea array-ului paginat
+  const indexOfLastSession = currentPage * sessionsPerPage;
+  const indexOfFirstSession = indexOfLastSession - sessionsPerPage;
+  const currentSessions = filteredSessions.slice(indexOfFirstSession, indexOfLastSession);
+
+  // 3. Determinăm numărul total de pagini
+  const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
 
   if (loading)
     return (
@@ -182,7 +210,7 @@ export default function PatientDashboard() {
                 </button>
               </div>
 
-              {/* Card Exercițiu 2 (CEL CU PROBLEME REPARAT ACUM) */}
+              {/* Card Exercițiu 2 */}
               <div style={{ ...exerciseCard, borderTop: "4px solid #a7c9b0" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <span style={exerciseCardTitle}>Prindere Obiecte Virtuale</span>
@@ -217,7 +245,7 @@ export default function PatientDashboard() {
               {/* Card Exercițiu 4 */}
               <div style={{ ...exerciseCard, borderTop: "4px solid #f59e0b" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <span style={exerciseCardTitle}>Flexie Degete</span>
+                  <span style={exerciseCardTitle}>Asamblare Floare</span>
                   <span style={exerciseCardDesc}>Monitorizarea amplitudinii articulare și a rigidității musculare.</span>
                 </div>
                 <button 
@@ -233,41 +261,96 @@ export default function PatientDashboard() {
             </div>
           </div>
 
-          {/* ISTORIC */}
+          {/* ISTORIC CU FILTRE ȘI PAGINARE */}
           <div style={activityBox}>
-            <h3 style={sectionTitle}>Istoric Sesiuni</h3>
-            <div style={listWrapper}>
-              {sessions.length > 0 ? (
-                sessions.map((s, i) => (
-                  <div
-                    key={s.id}
+            <div style={historyHeader}>
+              <h3 style={sectionTitle}>Istoric Sesiuni</h3>
+              
+              {/* Grup Butoane de Filtrare */}
+              <div style={filterGroup}>
+                {["Toate", "Forme", "Prindere", "Traseu", "Asamblare Cinematică Floare Sakura"].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => handleFilterChange(f)}
                     style={{
-                      ...sessionRow,
-                      backgroundColor: i % 2 === 0 ? "#ffffff" : "#fffbfc",
-                      borderBottom: i === sessions.length - 1 ? "none" : "1px solid #fceef1",
+                      ...filterTabBtn,
+                      backgroundColor: activeFilter === f ? "#ff8fa3" : "#fff",
+                      color: activeFilter === f ? "#fff" : "#8a7d84",
+                      border: activeFilter === f ? "1px solid #ff8fa3" : "1px solid #eef2f5",
                     }}
                   >
-                    <div style={rowInfo}>
-                      <div style={dateBadge}>
-                        {new Date(s.data_finalizare).toLocaleDateString("ro-RO")}
-                      </div>
-                      <span style={exerciseName}>{s.tip_exercitiu}</span>
-                    </div>
+                    {f === "Forme" ? "Coordonare" : f === "Asamblare Cinematică Floare Sakura" ? "Asamblare Cinematică Floare Sakura" : f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Listă Sesiuni Filtrate și Paginate */}
+            <div style={listWrapper}>
+              {currentSessions.length > 0 ? (
+                <>
+                  {currentSessions.map((s, i) => (
                     <div
+                      key={s.id}
                       style={{
-                        ...scoreBadge,
-                        color: s.scor >= 80 ? "#059669" : "#e11d48",
-                        backgroundColor: s.scor >= 80 ? "#ecfdf5" : "#fff1f2",
+                        ...sessionRow,
+                        backgroundColor: i % 2 === 0 ? "#ffffff" : "#fffbfc",
+                        borderBottom: i === currentSessions.length - 1 ? "none" : "1px solid #fceef1",
                       }}
                     >
-                      {s.scor}%
+                      <div style={rowInfo}>
+                        <div style={dateBadge}>
+                          {new Date(s.data_finalizare).toLocaleDateString("ro-RO")}
+                        </div>
+                        <span style={exerciseName}>{s.tip_exercitiu}</span>
+                      </div>
+                      <div
+                        style={{
+                          ...scoreBadge,
+                          color: s.scor >= 80 ? "#059669" : "#e11d48",
+                          backgroundColor: s.scor >= 80 ? "#ecfdf5" : "#fff1f2",
+                        }}
+                      >
+                        {s.scor}%
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+
+                  {/* CONTROALE PAGINARE (Apar doar dacă avem mai mult de o pagină) */}
+                  {totalPages > 1 && (
+                    <div style={paginationControlRow}>
+                      <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                        style={{
+                          ...paginationBtn,
+                          opacity: currentPage === 1 ? 0.4 : 1,
+                          cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        ← Înapoi
+                      </button>
+                      <span style={pageIndicatorText}>
+                        Pagina {currentPage} din {totalPages}
+                      </span>
+                      <button
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                        style={{
+                          ...paginationBtn,
+                          opacity: currentPage === totalPages ? 0.4 : 1,
+                          cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Înainte →
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div style={emptyState}>
-                  <p style={{ fontWeight: 600, color: "#8a7d84" }}>
-                    Încă nu ai nicio sesiune înregistrată.
+                  <p style={{ fontWeight: 600, color: "#8a7d84", margin: 0 }}>
+                    Nu s-au găsit sesiuni pentru filtrul "{activeFilter}".
                   </p>
                 </div>
               )}
@@ -280,25 +363,21 @@ export default function PatientDashboard() {
   );
 }
 
-// --- STILURI SAKURA REFINED ---
-const pageWrapper: CSSProperties = { padding: "40px 20px", minHeight: "100vh", background: "#fffcfd" };
+// --- STILURI REFINED ȘI NOI ACCESORII DE FILTRARE ---
+const pageWrapper: CSSProperties = { padding: "40px 20px" }; // Eliminat background-ul solid rigid pentru transparență transparentă
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "35px" };
 const welcomeTitle: CSSProperties = { fontSize: "28px", fontWeight: 800, color: "#4d444a", margin: 0 };
 const welcomeSubtitle: CSSProperties = { color: "#b2a4ac", fontSize: "15px", marginTop: "4px" };
-
 const analysisBanner: CSSProperties = { background: "linear-gradient(90deg, #fff 0%, #fff5f7 100%)", padding: "24px", borderRadius: "20px", border: "1px solid #ffdae1", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: "25px", transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)" };
 const analysisIconBox: CSSProperties = { width: "50px", height: "50px", backgroundColor: "#fff", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", boxShadow: "0 2px 8px rgba(255, 143, 163, 0.1)" };
 const arrowCircle: CSSProperties = { width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold", transition: "all 0.3s ease", border: "1px solid #ffdae1" };
-
 const challengeBox: CSSProperties = { background: "#ffffff", padding: "20px", borderRadius: "20px", marginBottom: "25px", border: "1px solid #fceef1" };
 const progressBarTrack: CSSProperties = { height: "8px", background: "#fceef1", borderRadius: "4px", overflow: "hidden" };
 const progressBarFill: CSSProperties = { height: "100%", borderRadius: "4px", transition: "width 1s ease-out" };
-
 const statsGrid: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" };
 const statCard: CSSProperties = { background: "white", padding: "24px", borderRadius: "20px", border: "1px solid #fceef1", boxShadow: "0 2px 10px rgba(0,0,0,0.01)" };
 const statLabel: CSSProperties = { color: "#b2a4ac", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" };
 const statValue: CSSProperties = { fontSize: "32px", fontWeight: 800, color: "#4d444a", margin: "8px 0 0 0" };
-
 const exerciseSelectionBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1", marginBottom: "30px" };
 const exerciseGrid: CSSProperties = { display: "flex", flexDirection: "column", gap: "14px", marginTop: "15px" };
 const exerciseCard: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", backgroundColor: "#fffafb", border: "1px solid #ffeef2", borderTop: "4px solid #ff8fa3", borderRadius: "14px" };
@@ -307,6 +386,10 @@ const exerciseCardDesc: CSSProperties = { color: "#8a7d84", fontSize: "13px" };
 const startExerciseBtn: CSSProperties = { padding: "10px 20px", backgroundColor: "#ff8fa3", color: "white", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "14px", cursor: "pointer", transition: "all 0.2s" };
 
 const activityBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1" };
+const historyHeader: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "15px" };
+const filterGroup: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
+const filterTabBtn: CSSProperties = { padding: "6px 14px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s ease" };
+
 const sectionTitle: CSSProperties = { fontSize: "18px", fontWeight: 800, color: "#4d444a", margin: 0 };
 const listWrapper: CSSProperties = { borderRadius: "15px", overflow: "hidden", border: "1px solid #fceef1", marginTop: "15px" };
 const sessionRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" };
@@ -318,3 +401,8 @@ const emptyState: CSSProperties = { textAlign: "center", padding: "40px", color:
 const centeredStyle: CSSProperties = { textAlign: "center", marginTop: "30vh" };
 const labelBold: CSSProperties = { fontWeight: 700, color: "#8a7d84", fontSize: "14px" };
 const progressText: CSSProperties = { fontWeight: 800, color: "#ffb7c5", fontSize: "14px" };
+
+// Stiluri specifice pentru bara de paginare
+const paginationControlRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", backgroundColor: "#fffafb", borderTop: "1px solid #fceef1" };
+const paginationBtn: CSSProperties = { padding: "6px 14px", backgroundColor: "white", border: "1px solid #eef2f5", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "#8a7d84", transition: "all 0.2s" };
+const pageIndicatorText: CSSProperties = { fontSize: "13px", fontWeight: "700", color: "#b2a4ac" };

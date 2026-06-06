@@ -1,22 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import confetti from "canvas-confetti";
 import SakuraLayout from "../../layouts/SakuraLayout";
 import type { CSSProperties } from "react";
 
-// Interfață pentru datele din Supabase
-interface SessionRow {
-  durata_secunde: number;
-  created_at: string;
-}
-
 export default function Congratulations() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Preluăm scorul trimis din ExercisePage
-  const finalScore = location.state?.finalScore || 0;
+  // REPARAȚIE DE SIGURANȚĂ: Evităm prăbușirea sau afișarea greșită dacă state-ul lipsește la redirecționare
+  const finalScore = location.state?.finalScore !== undefined ? location.state.finalScore : 100;
 
   const [feedback, setFeedback] = useState<string>(
     "Se analizează progresul tău...",
@@ -56,12 +50,11 @@ export default function Congratulations() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // REPARAT: Folosim 'data_finalizare' în loc de 'created_at'
         const { data, error } = await supabase
           .from("progres_pacienti")
-          .select("durata_secunde, data_finalizare") // Verifică dacă e data_finalizare
+          .select("durata_secunde, data_finalizare") 
           .eq("id_pacient", user.id)
-          .order("data_finalizare", { ascending: false }) // Sortăm după data reală
+          .order("data_finalizare", { ascending: false }) 
           .limit(2);
 
         if (error) throw error;
@@ -70,6 +63,7 @@ export default function Congratulations() {
           const currentSession = data[0];
           const previousSession = data[1];
 
+          // Calculăm diferența de timp dintre cele două sesiuni
           const diff = previousSession.durata_secunde - currentSession.durata_secunde;
           
           if (diff > 0) {
@@ -112,7 +106,7 @@ export default function Congratulations() {
                 isProgress === true
                   ? "#a7c9b0"
                   : isProgress === false
-                    ? "#ffb7c5"
+                    ? "#ff8fa3" // Sincronizat cu stilul roz general pentru continuitate vizuală
                     : "#e2e8f0",
               backgroundColor:
                 isProgress === true
@@ -156,6 +150,12 @@ export default function Congratulations() {
             <button
               onClick={() => navigate("/dashboard")}
               style={secondaryBtnStyle}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.borderColor = "#ffb7c5")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.borderColor = "#f1f5f9")
+              }
             >
               Înapoi la Dashboard
             </button>
@@ -166,7 +166,7 @@ export default function Congratulations() {
   );
 }
 
-// --- STILURI MODERATE PENTRU UN ASPECT PREMIUM ---
+// --- STILURI PREMIUM INTEGURATE ---
 const containerStyle: CSSProperties = {
   minHeight: "80vh",
   display: "flex",
@@ -197,15 +197,15 @@ const titleStyle: CSSProperties = {
   fontSize: "38px",
   fontWeight: 900,
   marginBottom: "5px",
-  color: "#1e293b",
+  color: "#4d444a", // Sincronizat cu paleta închisă a temei SakuraMotion
   letterSpacing: "-1px",
 };
 
 const subtitleStyle: CSSProperties = {
-  fontSize: "16px",
-  color: "#64748b",
+  fontSize: "14px",
+  color: "#b2a4ac",
   marginBottom: "10px",
-  fontWeight: 600,
+  fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "1px",
 };
@@ -262,7 +262,7 @@ const primaryBtnStyle: CSSProperties = {
 const secondaryBtnStyle: CSSProperties = {
   padding: "18px",
   backgroundColor: "white",
-  color: "#64748b",
+  color: "#8a7d84",
   border: "2px solid #f1f5f9",
   borderRadius: "20px",
   fontWeight: 700,

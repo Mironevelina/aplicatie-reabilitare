@@ -70,7 +70,10 @@ client/src/pages/doctor/DoctorDashboard.tsx
 client/src/pages/doctor/PatientStats.tsx
 client/src/pages/patient/Congratulations.tsx
 client/src/pages/patient/ExercisePage.tsx
+client/src/pages/patient/FingersExercisePage.tsx
+client/src/pages/patient/MazeExercisePage.tsx
 client/src/pages/patient/PatientDashboard.tsx
+client/src/pages/patient/PinchExercisePage.tsx
 client/src/pages/patient/ProgressPage.tsx
 client/src/pages/shared/ContactPage.tsx
 client/src/pages/shared/ForgotPassword.tsx
@@ -96,8 +99,18 @@ public/mediapipe/hands.binarypb
 public/mediapipe/hands.js
 public/vite.svg
 server/.env
+server/dist/config/supabase.js
+server/dist/controllers/aiController.js
+server/dist/controllers/chatController.js
+server/dist/controllers/exerciseController.js
+server/dist/index.js
+server/dist/lib/calcul-miscare.js
+server/dist/routes/adminRoutes.js
+server/dist/routes/chatRoutes.js
+server/dist/routes/exerciseRoutes.js
 server/package.json
 server/repomix-output.xml
+server/scripts/kill-port-5000.js
 server/src/config/supabase.ts
 server/src/controllers/aiController.ts
 server/src/controllers/chatController.ts
@@ -206,6 +219,7 @@ export default defineConfig([
     "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/hands": "^0.4.1675469240",
     "@supabase/supabase-js": "^2.95.3",
+    "axios": "^1.17.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^12.39.0",
     "html2canvas": "^1.4.1",
@@ -4820,7 +4834,7 @@ import AdminDoctors from './pages/admin/AdminDoctors';
 import PatientDetails from './pages/admin/PatientDetails';
 import UserManagement from './pages/admin/UserManagement';
 import DoctorDetails from './pages/admin/DoctorDetails';
-import AdminMessages from './pages/admin/AdminMessages'; // <-- Import nou pentru mesaje
+import AdminMessages from './pages/admin/AdminMessages';
 
 // Importuri Medic
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
@@ -4831,14 +4845,28 @@ import PatientDashboard from './pages/patient/PatientDashboard';
 import Congratulations from './pages/patient/Congratulations';
 import ExercisePage from './pages/patient/ExercisePage';
 import ProgressPage from './pages/patient/ProgressPage';
+import PinchExercisePage from "./pages/patient/PinchExercisePage";
+import {MazeExercisePage} from "./pages/patient/MazeExercisePage";
+import { FingersExercisePage } from "./pages/patient/FingersExercisePage";
 
+function RoleBasedRedirect() {
+  // Preluăm rolul utilizatorului (salvat la login în localStorage sau în contextul aplicației)
+  const userRole = localStorage.getItem('userRole'); 
+
+  if (userRole === 'admin') {
+    return <Navigate to="/admin" replace />;
+  } else if (userRole === 'doctor') {
+    return <Navigate to="/doctor-dashboard" replace />;
+  } else if (userRole === 'patient') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Dacă nu este găsit niciun rol valid, trimitem utilizatorul înapoi la Home
+  return <Navigate to="/" replace />;
+}
 function App() {
   return (
     <Router>
-      {/* Sfat: SakuraLayout este deja folosit în interiorul fiecărei pagini (conform codului anterior).
-        Dacă dorești să îl pui aici global, ar trebui să înfășoare <Routes>, 
-        dar momentan paginile tale îl conțin deja individual.
-      */}
       <Routes>
         {/* --- PAGINI PUBLICE --- */}
         <Route path="/" element={<Home />} />
@@ -4849,7 +4877,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-
+       <Route path="/redirect" element={<RoleBasedRedirect />} />
         {/* --- RUTE ADMIN --- */}
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/sessions" element={<AdminSessions />} />
@@ -4858,7 +4886,7 @@ function App() {
         <Route path="/admin/users" element={<UserManagement />} />
         <Route path="/admin/pacient/:id" element={<PatientDetails />} />
         <Route path="/admin/doctor/:id" element={<DoctorDetails />} />
-        <Route path="/admin/messages" element={<AdminMessages />} /> {/* <-- Ruta pentru Inbox-ul Adminului */}
+        <Route path="/admin/messages" element={<AdminMessages />} />
 
         {/* --- RUTE MEDIC --- */}
         <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
@@ -4870,6 +4898,10 @@ function App() {
         <Route path="/felicitari" element={<Congratulations />} />
         <Route path="/progres" element={<ProgressPage />} />
         
+        {/* ALINIERE RUTE EXERCIȚII (Sincronizate perfect cu butoanele din Dashboard) */}
+        <Route path="/exercitiu-prindere" element={<PinchExercisePage />} />
+        <Route path="/exercitiu-traseu" element={<MazeExercisePage />} />
+        <Route path="/exercitiu-degete" element={<FingersExercisePage />} />
         {/* --- RUTE COMUNE (Logați) --- */}
         <Route path="/profil" element={<ProfilePage />} />
         
@@ -4947,31 +4979,112 @@ import type { CSSProperties } from 'react';
 const Footer = () => {
   return (
     <footer style={footerStyle}>
-      <div style={{ marginBottom: '10px' }}>
-        <strong>SakuraMotion</strong> - Platformă Digitală de Reabilitare
+      <div style={footerGrid}>
+        
+        {/* Coloana 1: Despre Platformă */}
+        <div style={footerColumn}>
+          <div style={columnTitle}>🌸 SakuraMotion</div>
+          <p style={columnText}>
+            O platformă digitală integrată de reabilitare care utilizează tehnici avansate 
+            de vedere artificială pentru recuperarea motricității fine a membrelor superioare, 
+            asigurând asistență medicală monitorizată direct la domiciliul pacientului.
+          </p>
+        </div>
+
+        {/* Coloana 2: Cadru Academic */}
+        <div style={footerColumn}>
+          <div style={columnTitle}>Cadru Academic</div>
+          <p style={columnText}>
+            Proiect de Diplomă realizat în cadrul Facultății de Inginerie Electrică și Știința Calculatoarelor 
+            (FIESC), Universitatea „Ștefan cel Mare” din Suceava. <br />
+            <strong>Specializarea:</strong> Calculatoare
+          </p>
+        </div>
+
+        {/* Coloana 3: Credite Autor */}
+        <div style={footerColumn}>
+          <div style={columnTitle}>Echipa de Proiect</div>
+          <p style={columnText}>
+            <strong>Absolvent:</strong> Evelina Miron<br />
+            <strong>Îndrumător Științific:</strong> Șef lucrări dr. inf. Bilius Laura-Bianca<br />
+            <strong>An universitar:</strong> 2025 - 2026
+          </p>
+        </div>
+
       </div>
-      <div style={{ fontSize: '13px', opacity: 0.8 }}>
-        © 2026 Proiect de Licență | Realizat pentru recuperare medicală
-      </div>
-      <div style={{ marginTop: '10px', display: 'flex', gap: '20px', justifyContent: 'center' }}>
-        <span style={footerLink}>Termeni</span>
-        <span style={footerLink}>Confidențialitate</span>
-        <span style={footerLink}>Contact</span>
+
+      {/* Linia de jos pentru Copyright și Linkuri */}
+      <div style={footerBottom}>
+        <div style={{ fontSize: '13px', opacity: 0.8 }}>
+          © 2026 SakuraMotion. Toate drepturile rezervate.
+        </div>
+        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+          <span style={footerLink}>Termeni și condiții</span>
+          <span style={footerLink}>Politică de Confidențialitate</span>
+          <span style={footerLink}>Contact USV</span>
+        </div>
       </div>
     </footer>
   );
 };
 
+// --- STILURI FOOTER ---
 const footerStyle: CSSProperties = {
-  textAlign: 'center',
-  padding: '40px 20px',
+  padding: '50px 5% 30px 5%',
   backgroundColor: '#fdf7f8',
   borderTop: '1px solid #ffeef2',
   color: '#8a7d84',
-  marginTop: '50px'
+  marginTop: '60px'
 };
 
-const footerLink: CSSProperties = { fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' };
+const footerGrid: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+  gap: '40px',
+  maxWidth: '1200px',
+  margin: '0 auto',
+  textAlign: 'left'
+};
+
+const footerColumn: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px'
+};
+
+const columnTitle: CSSProperties = {
+  fontSize: '16px',
+  fontWeight: '700',
+  color: '#4d444a',
+  marginBottom: '5px'
+};
+
+const columnText: CSSProperties = {
+  fontSize: '13px',
+  lineHeight: '1.6',
+  opacity: 0.9,
+  margin: 0
+};
+
+const footerBottom: CSSProperties = {
+  marginTop: '40px',
+  paddingTop: '20px',
+  borderTop: '1px solid rgba(255, 183, 197, 0.2)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '15px',
+  alignItems: 'center',
+  justifyContent: 'center',
+  textAlign: 'center'
+};
+
+const footerLink: CSSProperties = { 
+  fontSize: '13px', 
+  cursor: 'pointer', 
+  textDecoration: 'none',
+  opacity: 0.8,
+  transition: 'opacity 0.2s'
+};
 
 export default Footer;
 </file>
@@ -5039,6 +5152,14 @@ const Header = () => {
 
   if (['/login', '/signup', '/forgot-password'].includes(location.pathname)) return null;
 
+  // Funcție ajutătoare pentru a naviga direct la panoul de control corect în funcție de rol
+  const handleDashboardNavigation = () => {
+    if (!profile) return;
+    if (profile.role === 'admin') navigate('/admin');
+    else if (profile.role === 'doctor') navigate('/doctor-dashboard');
+    else navigate('/dashboard');
+  };
+
   return (
     <header style={headerStyle}>
       <div style={logoSection} onClick={() => navigate('/')}>
@@ -5047,22 +5168,26 @@ const Header = () => {
       </div>
 
       <nav style={navStyle}>
-        <span style={linkStyle} onClick={() => navigate('/')}>Acasa</span>
+        <span style={linkStyle} onClick={() => navigate('/')}>Acasă</span>
+        <span style={linkStyle} onClick={() => navigate('/explore')}>Explorează</span>
         <span style={linkStyle} onClick={() => navigate('/contact')}>Contact</span>
 
         {!loading && (
           <>
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 
-                {/* AM ELIMINAT CLOPOȚELUL DE NOTIFICĂRI CHAT AICI */}
+                {/* Buton dinamic și inteligent de Panou Control bazat pe rol */}
+                <button style={panelBtn} onClick={handleDashboardNavigation}>
+                  {profile?.role === 'admin' ? 'Panou Admin' : 'Panou Control'}
+                </button>
 
-                {profile?.role === 'admin' ? (
-                  <button style={adminBtn} onClick={() => navigate('/admin')}>Panou Admin</button>
-                ) : (
+                {/* Avatarul rotund vizibil doar pentru Medici și Pacienți */}
+                {profile?.role !== 'admin' && (
                   <div 
                     style={{...profileCircle, backgroundColor: profile?.role === 'doctor' ? '#a7c9b0' : '#ffb7c5'}} 
                     onClick={() => navigate('/profil')}
+                    title="Profilul meu"
                   >
                     {profile?.full_name?.[0]?.toUpperCase() || 'U'}
                   </div>
@@ -5080,16 +5205,42 @@ const Header = () => {
   );
 };
 
-// --- STILURI (curățate de badge/notificări) ---
-const headerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 5%', backgroundColor: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255, 183, 197, 0.3)', position: 'sticky', top: 0, zIndex: 1000 };
+// Înlocuiește complet obiectul headerStyle de la finalul fișierului tău Header.tsx cu acesta:
+const headerStyle: React.CSSProperties = { 
+  display: 'flex', 
+  justifyContent: 'space-between', 
+  alignItems: 'center', 
+  
+  // 1. Spatieri interioare elegante (sus-jos / stânga-dreapta)
+  padding: '14px 5%', 
+  backgroundColor: '#ffffff', 
+  borderBottom: '1px solid rgba(255, 183, 197, 0.4)', 
+  boxShadow: '0 4px 12px rgba(255, 183, 197, 0.12)', 
+  
+  // 2. Poziționarea fixă, dar adaptată la containerul paginii
+  position: 'fixed', 
+  top: 0, 
+  left: 0,
+  right: 0,
+  
+  // 3. REPARAREA POTRIVIRII: Folosim 100% în loc de 100vw pentru a respecta marginile ferestrei
+  width: '100%', 
+  
+  // 4. Siguranță pentru straturi
+  zIndex: 999999,    
+  boxSizing: 'border-box' // Forțează browserul să includă padding-ul în lățimea totală, prevenind overflow-ul
+};
 const logoSection: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' };
 const titleStyle: React.CSSProperties = { fontSize: '20px', fontWeight: '800', color: '#4d444a', letterSpacing: '-0.5px' };
 const navStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '20px' };
 const linkStyle: React.CSSProperties = { fontSize: '15px', fontWeight: '600', color: '#8a7d84', cursor: 'pointer' };
 const authBtn: React.CSSProperties = { padding: '10px 25px', backgroundColor: '#ff6b81', color: 'white', border: 'none', borderRadius: '25px', fontWeight: '700', cursor: 'pointer' };
-const adminBtn: React.CSSProperties = { padding: '8px 20px', backgroundColor: '#4d444a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '700', cursor: 'pointer' };
+
+// Buton de panou unificat, modern și elegant
+const panelBtn: React.CSSProperties = { padding: '8px 20px', backgroundColor: '#4d444a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' };
+
 const logoutBtn: React.CSSProperties = { padding: '8px 18px', backgroundColor: 'transparent', color: '#8a7d84', border: '1px solid #e0e0e0', borderRadius: '20px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' };
-const profileCircle: React.CSSProperties = { width: '38px', height: '38px', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer' };
+const profileCircle: React.CSSProperties = { width: '38px', height: '38px', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' };
 
 export default Header;
 </file>
@@ -5142,28 +5293,111 @@ interface SakuraLayoutProps {
 const SakuraLayout = memo(({ children }: SakuraLayoutProps) => {
   return (
     <div style={layoutWrapper}>
+      {/* HEADER-UL APLICAȚIEI */}
       <Header />
+      
+      {/* ELEMENTE DE FUNDAL FIXE ÎN COLȚURI */}
+      <div style={sakuraDecorationLeft}>🌸</div>
+      <div style={sakuraDecorationRight}>🌸</div>
+
+      {/* CONȚINUTUL PRINCIPAL */}
       <main style={mainContent}>
         {children}
       </main>
+      
+      {/* FOOTER-UL ACADEMIC */}
       <Footer />
+
+      {/* STILUL CSS INJECTAT PENTRU MIȘCAREA ȘI OPACITATEA COMPONENTELOR */}
+      <style>{`
+        @keyframes floatSlow {
+          0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+          10% { opacity: 0.5; }
+          90% { opacity: 0.5; }
+          100% { transform: translateY(105vh) translateX(70px) rotate(360deg); opacity: 0; }
+        }
+        
+        /* Forțăm containerele albe din pagini să devină ușor translucide */
+        main div[style*="backgroundColor: rgb(255, 255, 255)"], 
+        main div[style*="background-color: rgb(255, 255, 255)"],
+        main .bg-white {
+          background-color: rgba(255, 255, 255, 0.92) !important;
+          backdrop-filter: blur(3px);
+        }
+      `}</style>
+      
+      {/* PLOAIE BOGATĂ DE PETALE (10 fluxuri cu zIndex: 2 - în spatele textului) */}
+      <div style={{...petalStyle, left: '5%', animationDelay: '0s', fontSize: '14px', animationDuration: '14s'}}>🌸</div>
+      <div style={{...petalStyle, left: '15%', animationDelay: '4s', fontSize: '10px', animationDuration: '16s'}}>🌸</div>
+      <div style={{...petalStyle, left: '25%', animationDelay: '1s', fontSize: '16px', animationDuration: '13s'}}>🌸</div>
+      <div style={{...petalStyle, left: '38%', animationDelay: '6s', fontSize: '12px', animationDuration: '15s'}}>🌸</div>
+      <div style={{...petalStyle, left: '48%', animationDelay: '2s', fontSize: '15px', animationDuration: '12s'}}>🌸</div>
+      <div style={{...petalStyle, left: '58%', animationDelay: '8s', fontSize: '9px', animationDuration: '17s'}}>🌸</div>
+      <div style={{...petalStyle, left: '68%', animationDelay: '3s', fontSize: '18px', animationDuration: '14s'}}>🌸</div>
+      <div style={{...petalStyle, left: '78%', animationDelay: '5s', fontSize: '11px', animationDuration: '16s'}}>🌸</div>
+      <div style={{...petalStyle, left: '88%', animationDelay: '0.5s', fontSize: '13px', animationDuration: '13s'}}>🌸</div>
+      <div style={{...petalStyle, left: '95%', animationDelay: '7s', fontSize: '16px', animationDuration: '15s'}}>🌸</div>
     </div>
   );
 });
 
-// Stiluri curate, fără elemente de chat
+// --- CONFIGURAȚIE STILURI ---
+
 const layoutWrapper: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   minHeight: '100vh',
-  backgroundColor: '#fffafb', // Fundalul temei Sakura
+  backgroundColor: '#fffafb', 
+  position: 'relative',
+  overflowX: 'hidden',
 };
 
 const mainContent: React.CSSProperties = {
   flex: 1,
   display: 'flex',
   flexDirection: 'column',
-  position: 'relative', // Păstrăm contextul pentru viitoarele elemente de analiză
+  position: 'relative', 
+  paddingTop: '90px',        
+  paddingBottom: '50px',     
+  width: '100%',
+  maxWidth: '1280px',        
+  margin: '0 auto',          
+  paddingLeft: '5%',       
+  paddingRight: '5%',      
+  boxSizing: 'border-box',
+  zIndex: 3, // Textul stă deasupra pentru interacțiune facilă
+};
+
+const sakuraDecorationLeft: React.CSSProperties = {
+  position: 'fixed',
+  bottom: '-20px',
+  left: '-20px',
+  fontSize: '120px',
+  opacity: 0.05, 
+  pointerEvents: 'none', 
+  zIndex: 2, 
+  userSelect: 'none'
+};
+
+const sakuraDecorationRight: React.CSSProperties = {
+  position: 'fixed',
+  top: '120px',
+  right: '-30px',
+  fontSize: '140px',
+  opacity: 0.04, 
+  pointerEvents: 'none',
+  zIndex: 2, 
+  userSelect: 'none'
+};
+
+const petalStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: '-40px',
+  pointerEvents: 'none',
+  zIndex: 2, // În spatele textului din main (care are zIndex: 3)
+  opacity: 0,
+  userSelect: 'none',
+  animation: 'floatSlow 14s linear infinite', 
 };
 
 export default SakuraLayout;
@@ -6649,7 +6883,7 @@ export default DoctorDashboard;
 </file>
 
 <file path="client/src/pages/doctor/PatientStats.tsx">
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import SakuraLayout from "../../layouts/SakuraLayout";
@@ -6661,6 +6895,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  ReferenceLine,
 } from "recharts";
 
 // --- INTERFEȚE ---
@@ -6672,6 +6907,7 @@ interface SessionData {
   id: string | number;
   scor: number;
   data_finalizare: string;
+  tip_exercitiu?: string;
   durata_secunde?: number;
 }
 
@@ -6682,17 +6918,16 @@ export default function PatientStats() {
   // State-uri de bază
   const [patient, setPatient] = useState<PatientData | null>(null);
   const [allSessions, setAllSessions] = useState<SessionData[]>([]);
-  const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State-uri pentru Filtrare și Paginare
-  const [filterType, setFilterType] = useState<"toate" | "peste80" | "recente">(
-    "toate",
-  );
+  // State-uri pentru Filtrare și Paginare avansată
+  const [filterType, setFilterType] = useState<"toate" | "peste80" | "recente">("toate");
+  const [filtruExercitiu, setFiltruExercitiu] = useState<string>("all");
+  const [ordonareData, setOrdonareData] = useState<"desc" | "asc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // Am pus 5 ca să poți testa paginarea ușor
+  const itemsPerPage = 5; 
 
-  // State-uri pentru AI
+  // State-uri pentru AI real
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
@@ -6708,17 +6943,16 @@ export default function PatientStats() {
         .maybeSingle();
       setPatient(p as PatientData);
 
-      // 2. Luăm toate sesiunile
+      // 2. Luăm toate sesiunile din Supabase (ordonate cronologic crescător pentru grafic)
       const { data, error } = await supabase
         .from("progres_pacienti")
-        .select("*")
+        .select("id, scor, data_finalizare, tip_exercitiu, durata_secunde")
         .eq("id_pacient", id)
         .order("data_finalizare", { ascending: true });
 
       if (error) throw error;
       const sessions = (data as SessionData[]) || [];
       setAllSessions(sessions);
-      setFilteredSessions(sessions);
     } catch (e) {
       console.error("Eroare la preluarea datelor:", e);
     } finally {
@@ -6730,229 +6964,310 @@ export default function PatientStats() {
     fetchData();
   }, [fetchData]);
 
-  // --- LOGICA DE FILTRARE ---
-  useEffect(() => {
+  // --- LOGICA DE FILTRARE ȘI ORDONARE ADVANCED (useMemo) ---
+  const filteredSessions = useMemo(() => {
     let result = [...allSessions];
+
+    // Filtru tip sesiune (Toate / Peste 80 / Recente)
     if (filterType === "peste80") {
       result = result.filter((s) => s.scor >= 80);
     } else if (filterType === "recente") {
       const oSaptamanaInUrma = new Date();
       oSaptamanaInUrma.setDate(oSaptamanaInUrma.getDate() - 7);
-      result = result.filter(
-        (s) => new Date(s.data_finalizare) >= oSaptamanaInUrma,
-      );
+      result = result.filter((s) => new Date(s.data_finalizare) >= oSaptamanaInUrma);
     }
-    // Când filtrăm, resetăm la prima pagină
-    setFilteredSessions(result);
+
+    // Filtru după Tipul de exercițiu (Suportă acum toate cele 4 tipuri din bază)
+    if (filtruExercitiu !== "all") {
+      result = result.filter((s) => s.tip_exercitiu === filtruExercitiu);
+    }
+
+    // Ordonare cronologică dinamică pentru tabel/liste
+    result.sort((a, b) => {
+      const timeA = new Date(a.data_finalizare).getTime();
+      const timeB = new Date(b.data_finalizare).getTime();
+      return ordonareData === "desc" ? timeB - timeA : timeA - timeB;
+    });
+
+    return result;
+  }, [allSessions, filterType, filtruExercitiu, ordonareData]);
+
+  // Resetăm pagina când filtrele se modifică
+  useEffect(() => {
     setCurrentPage(1);
-  }, [filterType, allSessions]);
+  }, [filterType, filtruExercitiu, ordonareData]);
 
   // --- LOGICA DE PAGINARE ---
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentSessions = [...filteredSessions]
-    .reverse()
-    .slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage) || 1;
+  const paginaSigura = currentPage > totalPages ? 1 : currentPage;
 
-  // Datele pentru grafic (întotdeauna folosim ALL sessions pentru a vedea evoluția completă)
+  const indexOfLastItem = paginaSigura * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentSessions = filteredSessions.slice(indexOfFirstItem, indexOfLastItem);
+
+  // Datele pentru grafic
   const chartData = allSessions.map((curr, index) => ({
-    index,
+    index: index + 1, 
     scor: curr.scor,
+    tipExercitiu: curr.tip_exercitiu || "Coordonare Forme",
     dataReal: new Date(curr.data_finalizare).toLocaleDateString("ro-RO"),
   }));
 
-  const firstScore = allSessions.length > 0 ? allSessions[0].scor : 0;
-  const lastScore =
-    allSessions.length > 0 ? allSessions[allSessions.length - 1].scor : 0;
-  const diff = lastScore - firstScore;
-  const isEvolution = diff >= 0;
+  // --- CALCUL EVALUȚIE CLINICĂ MEDICAĂ (Abatere Standard & CV) ---
+  const { statusEvolutie, medieGlobalaCalculata } = useMemo(() => {
+    if (allSessions.length === 0) {
+      return { statusEvolutie: { text: "Fără ședințe înregistrate", culoare: "#64748b", bg: "#f1f5f9" }, medieGlobalaCalculata: 0 };
+    }
+    if (allSessions.length < 2) {
+      return { statusEvolutie: { text: "Date insuficiente pentru analiză", culoare: "#64748b", bg: "#f1f5f9" }, medieGlobalaCalculata: allSessions[0].scor };
+    }
 
+    const scoruri = allSessions.map(s => s.scor);
+    const n = scoruri.length;
+    const medie = scoruri.reduce((a, b) => a + b, 0) / n;
+    
+    const varianta = scoruri.reduce((a, b) => a + Math.pow(b - medie, 2), 0) / n;
+    const abatereStandard = Math.sqrt(varianta);
+    const cv = medie > 0 ? (abatereStandard / medie) * 100 : 0;
+
+    const ultimeleSesiuni = scoruri.slice(-3);
+    const trendCrescator = ultimeleSesiuni.length >= 2 && ultimeleSesiuni[ultimeleSesiuni.length - 1] > ultimeleSesiuni[0];
+
+    if (cv > 30) {
+      return {
+        statusEvolutie: {
+          text: `Fluctuații Mari (${cv.toFixed(1)}% Coef. Variabilitate)`,
+          culoare: "#c2410c",
+          bg: "#fff7ed"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    if (medie >= 85 && cv <= 12) {
+      return {
+        statusEvolutie: {
+          text: "Stabilizare în Platou Kinetic de Reabilitare",
+          culoare: "#15803d",
+          bg: "#f0fdf4"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    if (trendCrescator) {
+      return {
+        statusEvolutie: {
+          text: `Progres Recent Pozitiv (Medie acuratețe: ${Math.round(medie)}%)`,
+          culoare: "#1d4ed8",
+          bg: "#eff6ff"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    return {
+      statusEvolutie: {
+        text: `Ritm și Evoluție Constantă (${Math.round(medie)}% Acuratețe)`,
+        culoare: "#b91c1c",
+        bg: "#fff5f5"
+      },
+      medieGlobalaCalculata: Math.round(medie)
+    };
+  }, [allSessions]);
+
+  // --- GENERARE RAPORT AI ---
   const generateAiReport = async () => {
+    if (allSessions.length === 0) return;
     setIsGeneratingAi(true);
-    setTimeout(() => {
-      if (allSessions.length < 3) {
-        setAiAnalysis(
-          "Date insuficiente pentru o analiză statistică relevantă. Sunt necesare minim 3 ședințe pentru a genera un raport de trend.",
-        );
+    setAiAnalysis("");
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_pacient: id })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAiAnalysis(data.analysis || data.rezumat);
       } else {
-        setAiAnalysis(
-          `Analiza indică o traiectorie ${isEvolution ? "pozitivă" : "stagnantă"}. S-a observat o variație de ${diff}%. Se recomandă menținerea frecvenței curente.`,
-        );
+        setAiAnalysis("Sistemul AI nu a putut prelua datele pacientului. Verificați conexiunea la server.");
       }
+    } catch (err) {
+      console.error("Eroare AI doctor panel:", err);
+      setAiAnalysis("Eroare de comunicare asincronă cu motorul clinic.");
+    } finally {
       setIsGeneratingAi(false);
-    }, 1200);
+    }
   };
 
   if (loading)
     return (
       <SakuraLayout>
-        <div
-          style={{ textAlign: "center", padding: "100px", color: "#64748b" }}
-        >
-          Se analizează indicatorii...
+        <div style={{ textAlign: "center", padding: "100px", color: "#ff8fa3", fontWeight: 800 }}>
+          🌸 Se încarcă fișa clinică a pacientului...
         </div>
       </SakuraLayout>
     );
 
   return (
     <SakuraLayout>
-      <div
-        style={{
-          padding: "20px 40px",
-          background: "#f8fafc",
-          minHeight: "100vh",
-        }}
-      >
+      <div style={{ padding: "40px 20px", background: "#fffafb", minHeight: "100vh" }}>
         <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          
           <button onClick={() => navigate(-1)} style={backBtnStyle}>
-            ← Dashboard
+            ← Înapoi la Dashboard
           </button>
 
           <div style={headerStyle}>
             <div>
-              <h1
-                style={{
-                  color: "#1e293b",
-                  margin: 0,
-                  fontSize: "28px",
-                  fontWeight: 800,
-                }}
-              >
-                Raport Evoluție
+              <h1 style={{ color: "#4d444a", margin: 0, fontSize: "28px", fontWeight: 900 }}>
+                Fișă Clinică & Evoluție 📈
               </h1>
-              <p style={{ color: "#64748b", fontSize: "18px" }}>
-                Pacient: {patient?.full_name}
+              <p style={{ color: "#8a7d84", fontSize: "16px", margin: "6px 0 0 0", fontWeight: 600 }}>
+                Pacient: <span style={{ color: "#ff8fa3", fontWeight: 800 }}>{patient?.full_name}</span>
               </p>
             </div>
 
-            {allSessions.length > 1 && (
+            {allSessions.length > 0 && (
               <div
                 style={{
                   ...trendBadge,
-                  background: isEvolution ? "#f0fdf4" : "#fef2f2",
-                  color: isEvolution ? "#166534" : "#991b1b",
+                  background: statusEvolutie.bg,
+                  color: statusEvolutie.culoare,
+                  border: `1px solid ${statusEvolutie.culoare}40`
                 }}
               >
-                Trend: {isEvolution ? "Progresiv" : "Regresiv"} (
-                {diff > 0 ? `+${diff}` : diff}%)
+                📈 Evoluție globală: <strong>{statusEvolutie.text}</strong>
               </div>
             )}
           </div>
 
-          {/* Grafic */}
+          {/* Grafic Evolutiv Recharts */}
           <div style={chartContainerStyle}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#f1f5f9"
-                />
-                <XAxis dataKey="index" hide />
-                <YAxis
-                  domain={[0, 100]}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#94a3b8", fontSize: 12 }}
-                />
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
+              <div style={{ color: "#4d444a", fontWeight: 800, fontSize: "15px" }}>
+                Analiza Mișcării și Evoluția Acurateții per Ședință
+              </div>
+              <div style={{ display: "flex", gap: "15px", fontSize: "11px", fontWeight: 700 }}>
+                <span style={{ color: "#16a34a" }}>● Exc. Motorie (≥80%)</span>
+                <span style={{ color: "#d97706" }}>● Target Mediu (50-80%)</span>
+                <span style={{ color: "#dc2626" }}>● Deficit Fin (&lt;50%)</span>
+              </div>
+            </div>
+
+            <ResponsiveContainer width="100%" height="85%">
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="index" tick={{ fill: "#8a7d84", fontSize: 11, fontWeight: 600 }} tickLine={false} />
+                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "#8a7d84", fontSize: 12, fontWeight: 600 }} />
+                
                 <Tooltip
-                  formatter={(
-                    value: unknown,
-                    _name: unknown,
-                    item: unknown,
-                  ) => {
-                    const payload = (item as { payload?: { dataReal: string } })
-                      ?.payload;
-                    return [
-                      `${(value as number) ?? 0}% Acuratețe`,
-                      `Data: ${payload?.dataReal ?? "N/A"}`,
-                    ] as [string, string];
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "16px", border: "1px solid #ffdae1", boxShadow: "0 10px 25px rgba(255, 143, 163, 0.15)" }}>
+                          <p style={{ margin: "0 0 4px 0", fontSize: "11px", fontWeight: 800, color: "#ff8fa3", textTransform: "uppercase" }}>Ședința #{data.index}</p>
+                          <p style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 800, color: "#4d444a" }}>{data.tipExercitiu}</p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", fontWeight: 700 }}>
+                            <span style={{ color: data.scor >= 80 ? "#16a34a" : data.scor >= 50 ? "#d97706" : "#dc2626" }}>Scor: {data.scor}%</span>
+                            <span style={{ color: "#8a7d84", fontWeight: 500 }}>| {data.dataReal}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
+
+                {allSessions.length > 0 && (
+                  <ReferenceLine 
+                    y={medieGlobalaCalculata} 
+                    stroke="#ff8fa3" 
+                    strokeDasharray="5 5" 
+                    strokeWidth={2}
+                    label={{ value: `Medie: ${medieGlobalaCalculata}%`, fill: "#ff8fa3", position: "insideTopLeft", fontSize: 12, fontWeight: 800 }} 
+                  />
+                )}
+
+                <ReferenceLine y={80} stroke="#16a34a" strokeDasharray="3 3" opacity={0.4} />
+                <ReferenceLine y={50} stroke="#dc2626" strokeDasharray="3 3" opacity={0.4} />
+
                 <Line
                   type="monotone"
                   dataKey="scor"
-                  stroke={isEvolution ? "#10b981" : "#ef4444"}
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
+                  stroke="#ff8fa3"
+                  strokeWidth={4.5}
+                  dot={{ r: 5, fill: "#ff8fa3", strokeWidth: 2, stroke: "#ffffff" }}
+                  activeDot={{ r: 8, strokeWidth: 0, fill: "#4f46e5" }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* AI Panel */}
+          {/* Raport AI dedicat Medicului */}
           <div style={aiPanelStyle}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "15px",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Analiză AI</h3>
-              <button
-                onClick={generateAiReport}
-                disabled={isGeneratingAi}
-                style={aiBtnStyle}
-              >
-                {isGeneratingAi ? "Generare..." : "Analizează Datele"}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+              <h3 style={{ margin: 0, color: "#4d444a", fontWeight: 800 }}>✨ Interpretare Clinică AI (Raport Medic)</h3>
+              <button onClick={generateAiReport} disabled={isGeneratingAi} style={aiBtnStyle}>
+                {isGeneratingAi ? "🌸 Se analizează..." : "Generează Raport Direct"}
               </button>
             </div>
             <div style={aiContentStyle}>
-              {aiAnalysis || "Sistem pregătit pentru evaluare."}
+              {aiAnalysis || "Sistemul expert este pregătit pentru evaluarea automată a istoricului mișcărilor."}
             </div>
           </div>
 
-          {/* Filtre și Tabel */}
+          {/* Secțiune Filtre Multiple și Tabel Sesiuni */}
           <div style={{ marginBottom: "60px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Istoric Ședințe</h3>
+            <div style={filterHeaderStyle}>
+              <h3 style={{ margin: 0, color: "#4d444a", fontWeight: 800 }}>Istoric Ședințe Monitorizate</h3>
 
-              {/* Dropdown Filtrare */}
-              <select
-                value={filterType}
-                onChange={(e) =>
-                  setFilterType(
-                    e.target.value as "toate" | "peste80" | "recente",
-                  )
-                }
-                style={filterSelectStyle}
-              >
-                <option value="toate">Toate ședințele</option>
-                <option value="peste80">Scor &gt; 80%</option>
-                <option value="recente">Ultima săptămână</option>
-              </select>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} style={filterSelectStyle}>
+                  <option value="toate">Toate perioadele</option>
+                  <option value="peste80">Scor bun (Acuratețe ≥ 80%)</option>
+                  <option value="recente">Ultima săptămână</option>
+                </select>
+
+                {/* REPARAT: Selectorul conține acum toate cele 4 exerciții din SakuraMotion */}
+                <select value={filtruExercitiu} onChange={(e) => setFiltruExercitiu(e.target.value)} style={filterSelectStyle}>
+                  <option value="all">Toate tipurile de exerciții</option>
+                  <option value="Coordonare Forme">Coordonare Forme</option>
+                  <option value="Urmărire Traseu Labirint">Urmărire Traseu Labirint</option>
+                  <option value="Asamblare Cinematică Floare Sakura">Asamblare Cinematică Floare Sakura</option>
+                  <option value="Prindere Obiecte Virtuale">Prindere Obiecte Virtuale</option>
+                </select>
+
+                <select value={ordonareData} onChange={(e) => setOrdonareData(e.target.value as any)} style={filterSelectStyle}>
+                  <option value="desc">Cele mai recente în top</option>
+                  <option value="asc">Cele mai vechi în top</option>
+                </select>
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: "10px" }}>
-              {currentSessions.map((s, i) => (
+            {/* Rândurile cu Sesiuni */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {currentSessions.map((s) => (
                 <div key={s.id} style={sessionRowStyle}>
-                  <span>
-                    <b>#{filteredSessions.length - (indexOfFirstItem + i)}</b> —{" "}
-                    {new Date(s.data_finalizare).toLocaleString("ro-RO")}
-                  </span>
-                  <span
-                    style={{
-                      color: s.scor >= 70 ? "#10b981" : "#ef4444",
-                      fontWeight: 800,
-                    }}
-                  >
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <span style={{ fontWeight: 800, color: "#4d444a" }}>
+                      {s.tip_exercitiu || "Coordonare Forme"}
+                    </span>
+                    <span style={{ fontSize: "12px", color: "#8a7d84" }}>
+                      Data finalizării: {new Date(s.data_finalizare).toLocaleString("ro-RO")} {s.durata_secunde ? `| Durată: ${s.durata_secunde} secunde` : ''}
+                    </span>
+                  </div>
+                  <span style={{ color: s.scor >= 70 ? "#1f7a42" : "#991b1b", fontWeight: 900, fontSize: "16px", backgroundColor: s.scor >= 70 ? "#e6f7ed" : "#fef2f2", padding: "4px 12px", borderRadius: "8px" }}>
                     {s.scor}%
                   </span>
                 </div>
               ))}
+              
               {filteredSessions.length === 0 && (
-                <p style={{ textAlign: "center", color: "#94a3b8" }}>
-                  Nu există ședințe care să corespundă filtrului.
+                <p style={{ textAlign: "center", color: "#8a7d84", fontStyle: "italic", padding: "20px" }}>
+                  Nu s-au găsit ședințe care să corespundă criteriilor de filtrare selectate.
                 </p>
               )}
             </div>
@@ -6960,40 +7275,36 @@ export default function PatientStats() {
             {/* Controale Paginare */}
             {totalPages > 1 && (
               <div style={paginationContainer}>
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  style={pageBtn}
-                >
-                  Înapoi
+                <button disabled={paginaSigura === 1} onClick={() => setCurrentPage((p) => p - 1)} style={pageBtn}>
+                  Anterior
                 </button>
-                <span style={{ fontWeight: 600 }}>
-                  Pagina {currentPage} din {totalPages}
+                <span style={{ fontWeight: 700, color: "#4d444a", fontSize: "13px" }}>
+                  Pagina {paginaSigura} din {totalPages}
                 </span>
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  style={pageBtn}
-                >
-                  Înainte
+                <button disabled={paginaSigura === totalPages} onClick={() => setCurrentPage((p) => p + 1)} style={pageBtn}>
+                  Următor
                 </button>
               </div>
             )}
           </div>
+
         </div>
       </div>
     </SakuraLayout>
   );
 }
 
-// --- STILURI ---
+// --- STILURI SAKURA ---
 const backBtnStyle = {
   marginBottom: "20px",
-  padding: "8px 16px",
-  borderRadius: "8px",
-  border: "1px solid #e2e8f0",
+  padding: "10px 20px",
+  borderRadius: "12px",
+  border: "1px solid #ffeef2",
   background: "white",
+  color: "#8a7d84",
+  fontWeight: "bold" as const,
   cursor: "pointer",
+  transition: "all 0.2s ease"
 };
 const headerStyle: React.CSSProperties = {
   display: "flex",
@@ -7002,54 +7313,72 @@ const headerStyle: React.CSSProperties = {
   marginBottom: "25px",
 };
 const trendBadge: React.CSSProperties = {
-  padding: "8px 16px",
-  borderRadius: "20px",
-  fontWeight: 700,
-  fontSize: "14px",
+  padding: "10px 20px",
+  borderRadius: "12px",
+  fontWeight: 800,
+  fontSize: "13px",
+  transition: "all 0.3s ease"
 };
 const chartContainerStyle: React.CSSProperties = {
   background: "white",
-  padding: "20px",
-  borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  height: "300px",
+  padding: "25px",
+  borderRadius: "24px",
+  border: "1px solid #ffeef2",
+  height: "360px",
   marginBottom: "30px",
 };
 const aiPanelStyle: React.CSSProperties = {
-  background: "#f1f5f9",
+  background: "#fff5f6",
+  border: "1px solid #fff0f2",
   padding: "20px",
-  borderRadius: "16px",
+  borderRadius: "20px",
   marginBottom: "30px",
 };
 const aiBtnStyle = {
-  background: "#4f46e5",
+  background: "#ff8fa3",
   color: "white",
   border: "none",
-  padding: "8px 16px",
-  borderRadius: "8px",
+  padding: "10px 18px",
+  borderRadius: "12px",
+  fontWeight: "bold" as const,
   cursor: "pointer",
 };
 const aiContentStyle: React.CSSProperties = {
   background: "white",
-  padding: "15px",
-  borderRadius: "10px",
-  border: "1px solid #e2e8f0",
+  padding: "16px",
+  borderRadius: "14px",
+  border: "1px solid #ffeef2",
   fontSize: "14px",
+  color: "#4d444a",
+  lineHeight: "1.7",
+  whiteSpace: "pre-line",
+  wordBreak: "break-word"
+};
+const filterHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "20px",
+  flexWrap: "wrap",
+  gap: "15px"
 };
 const sessionRowStyle: React.CSSProperties = {
   background: "white",
-  padding: "15px 20px",
-  borderRadius: "12px",
+  padding: "16px 20px",
+  borderRadius: "14px",
   display: "flex",
   justifyContent: "space-between",
-  border: "1px solid #e2e8f0",
+  alignItems: "center",
+  border: "1px solid #ffeef2",
 };
 const filterSelectStyle = {
-  padding: "8px 12px",
-  borderRadius: "8px",
-  border: "1px solid #cbd5e1",
+  padding: "8px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ffeef2",
   background: "white",
-  fontSize: "14px",
+  color: "#4d444a",
+  fontSize: "13px",
+  fontWeight: "bold" as const,
   outline: "none",
 };
 const paginationContainer: React.CSSProperties = {
@@ -7060,34 +7389,30 @@ const paginationContainer: React.CSSProperties = {
   marginTop: "25px",
 };
 const pageBtn = {
-  padding: "6px 12px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5e1",
+  padding: "8px 14px",
+  borderRadius: "10px",
+  border: "1px solid #ffeef2",
   background: "white",
+  color: "#8a7d84",
+  fontWeight: "bold" as const,
   cursor: "pointer",
 };
 </file>
 
 <file path="client/src/pages/patient/Congratulations.tsx">
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import confetti from "canvas-confetti";
 import SakuraLayout from "../../layouts/SakuraLayout";
 import type { CSSProperties } from "react";
 
-// Interfață pentru datele din Supabase
-interface SessionRow {
-  durata_secunde: number;
-  created_at: string;
-}
-
 export default function Congratulations() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Preluăm scorul trimis din ExercisePage
-  const finalScore = location.state?.finalScore || 0;
+  // REPARAȚIE DE SIGURANȚĂ: Evităm prăbușirea sau afișarea greșită dacă state-ul lipsește la redirecționare
+  const finalScore = location.state?.finalScore !== undefined ? location.state.finalScore : 100;
 
   const [feedback, setFeedback] = useState<string>(
     "Se analizează progresul tău...",
@@ -7127,12 +7452,11 @@ export default function Congratulations() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // REPARAT: Folosim 'data_finalizare' în loc de 'created_at'
         const { data, error } = await supabase
           .from("progres_pacienti")
-          .select("durata_secunde, data_finalizare") // Verifică dacă e data_finalizare
+          .select("durata_secunde, data_finalizare") 
           .eq("id_pacient", user.id)
-          .order("data_finalizare", { ascending: false }) // Sortăm după data reală
+          .order("data_finalizare", { ascending: false }) 
           .limit(2);
 
         if (error) throw error;
@@ -7141,6 +7465,7 @@ export default function Congratulations() {
           const currentSession = data[0];
           const previousSession = data[1];
 
+          // Calculăm diferența de timp dintre cele două sesiuni
           const diff = previousSession.durata_secunde - currentSession.durata_secunde;
           
           if (diff > 0) {
@@ -7183,7 +7508,7 @@ export default function Congratulations() {
                 isProgress === true
                   ? "#a7c9b0"
                   : isProgress === false
-                    ? "#ffb7c5"
+                    ? "#ff8fa3" // Sincronizat cu stilul roz general pentru continuitate vizuală
                     : "#e2e8f0",
               backgroundColor:
                 isProgress === true
@@ -7227,6 +7552,12 @@ export default function Congratulations() {
             <button
               onClick={() => navigate("/dashboard")}
               style={secondaryBtnStyle}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.borderColor = "#ffb7c5")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.borderColor = "#f1f5f9")
+              }
             >
               Înapoi la Dashboard
             </button>
@@ -7237,7 +7568,7 @@ export default function Congratulations() {
   );
 }
 
-// --- STILURI MODERATE PENTRU UN ASPECT PREMIUM ---
+// --- STILURI PREMIUM INTEGURATE ---
 const containerStyle: CSSProperties = {
   minHeight: "80vh",
   display: "flex",
@@ -7268,15 +7599,15 @@ const titleStyle: CSSProperties = {
   fontSize: "38px",
   fontWeight: 900,
   marginBottom: "5px",
-  color: "#1e293b",
+  color: "#4d444a", // Sincronizat cu paleta închisă a temei SakuraMotion
   letterSpacing: "-1px",
 };
 
 const subtitleStyle: CSSProperties = {
-  fontSize: "16px",
-  color: "#64748b",
+  fontSize: "14px",
+  color: "#b2a4ac",
   marginBottom: "10px",
-  fontWeight: 600,
+  fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "1px",
 };
@@ -7333,7 +7664,7 @@ const primaryBtnStyle: CSSProperties = {
 const secondaryBtnStyle: CSSProperties = {
   padding: "18px",
   backgroundColor: "white",
-  color: "#64748b",
+  color: "#8a7d84",
   border: "2px solid #f1f5f9",
   borderRadius: "20px",
   fontWeight: 700,
@@ -7792,6 +8123,771 @@ const btnCancel: CSSProperties = {
 };
 </file>
 
+<file path="client/src/pages/patient/FingersExercisePage.tsx">
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Hands } from "@mediapipe/hands";
+import type { LandmarkList } from "@mediapipe/hands";
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
+import SakuraLayout from '../../layouts/SakuraLayout';
+import type { CSSProperties } from "react";
+
+// --- INTERFEȚE ---
+interface Petal {
+  id: number;
+  x: number; 
+  y: number; 
+  targetX: number; 
+  targetY: number;
+  angle: number; 
+  radius: number; 
+  atasata: boolean;
+}
+
+interface MediaPipeResults {
+  multiHandLandmarks: LandmarkList[];
+  image: HTMLVideoElement;
+}
+
+export function FingersExercisePage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const navigate = useNavigate();
+
+  const handsRef = useRef<any>(null);
+  const cameraActiveRef = useRef<boolean>(false);
+  const requestRef = useRef<number | null>(null);
+
+  // Stări administrative și progres
+  const [idPacient, setIdPacient] = useState<string>("");
+  const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const [score, setScore] = useState(0);
+  const [isReady, setIsReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [ghidTerapeutic, setGhidTerapeutic] = useState("Se inițializează fluxul video și senzorul optic...");
+
+  // Obiectiv fix: Receptaculul central al florii (proporții normalizate 0-1)
+  const centerFlower = { x: 0.5, y: 0.23, radius: 0.05 }; 
+
+  // Referințe mutabile pentru stocarea datelor în timp real
+  const scoreRef = useRef(0);
+  const startTimeRef = useRef<number | null>(null);
+  const isFinishedRef = useRef(false);
+  const activePetalIdRef = useRef<number | null>(null);
+  const handDataRef = useRef<{ x: number; y: number; visible: boolean }>({ x: 0.5, y: 0.5, visible: false });
+
+  // Matricea de petale salvată în Ref pentru acces instantaneu la 60fps
+  const petalsRef = useRef<Petal[]>([
+    { id: 1, x: 0.15, y: 0.8, targetX: 0.5, targetY: 0.23, angle: 0, radius: 0.022, atasata: false },
+    { id: 2, x: 0.32, y: 0.83, targetX: 0.5, targetY: 0.23, angle: (2 * Math.PI) / 5, radius: 0.022, atasata: false },
+    { id: 3, x: 0.5, y: 0.85, targetX: 0.5, targetY: 0.23, angle: (4 * Math.PI) / 5, radius: 0.022, atasata: false },
+    { id: 4, x: 0.68, y: 0.83, targetX: 0.5, targetY: 0.23, angle: (6 * Math.PI) / 5, radius: 0.022, atasata: false },
+    { id: 5, x: 0.85, y: 0.8, targetX: 0.5, targetY: 0.23, angle: (8 * Math.PI) / 5, radius: 0.022, atasata: false },
+  ]);
+
+  // Preluare securizată a ID-ului de pacient la montare
+  useEffect(() => {
+    const getPatientData = async () => {
+      try {
+        setLoadingUser(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setIdPacient(user.id);
+      } catch (err) {
+        console.error("Eroare autentificare:", err);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    getPatientData();
+  }, []);
+
+  // REPARAT DEFINITIV: Oprirea completă a camerei hardware și eliminarea loop-ului video
+  const stopCamera = useCallback(() => {
+    // 1. Blocăm instantaneu buclele active din rula asincronă
+    cameraActiveRef.current = false;
+    isFinishedRef.current = true;
+
+    // 2. Anulăm frame-urile de animație programate
+    if (requestRef.current !== null) {
+      cancelAnimationFrame(requestRef.current);
+      requestRef.current = null;
+    }
+
+    // 3. Oprim toate track-urile stream-ului video hardware
+    if (streamRef.current) {
+      const tracks = streamRef.current.getTracks();
+      tracks.forEach((track) => {
+        track.stop();
+        track.enabled = false; // Forțăm dezactivarea la nivel electric/hardware
+      });
+      streamRef.current = null;
+    }
+
+    // 4. Decuplăm elementul video nativ din DOM
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+      videoRef.current.load(); // Resetează complet bufferul video din browser
+    }
+
+    // 5. Închidem instanța asincronă a modelului AI
+    if (handsRef.current) {
+      try {
+        const instance = handsRef.current;
+        handsRef.current = null; 
+        instance.close();
+      } catch (e) {
+        console.log("MediaPipe curățat.");
+      }
+    }
+  }, []);
+
+  const handleFinish = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    
+    // Oprim camera IMEDIAT pentru a stinge ledul înainte de procesarea bazei de date
+    stopCamera();
+
+    try {
+      const endTime = Date.now();
+      const start = startTimeRef.current || endTime;
+      const duration = Math.floor((endTime - start) / 1000);
+
+      const payload = {
+        id_pacient: idPacient || (await supabase.auth.getUser()).data.user?.id,
+        tip_exercitiu: "Asamblare Cinematică Floare Sakura",
+        scor: scoreRef.current,
+        durata_secunde: duration,
+        data_finalizare: new Date()
+      };
+
+      await supabase.from('progres_pacienti').insert([payload]);
+      navigate('/felicitari', { state: { finalScore: scoreRef.current } });
+    } catch (error) {
+      console.error("Eroare salvare progres:", error);
+      navigate('/felicitari', { state: { finalScore: scoreRef.current } });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isSaving, idPacient, navigate, stopCamera]);
+
+  const handleCancel = () => {
+    stopCamera();
+    navigate("/dashboard");
+  };
+
+  // Funcție geometrică stabilă pentru desenarea elegantă a unei petale Sakura (picătură)
+  const drawSakuraPetalGeometry = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rotation: number, isAttached: boolean) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-r * 1.5, -r * 1.5, -r * 1.5, -r * 3.5, 0, -r * 4);
+    ctx.bezierCurveTo(r * 1.5, -r * 3.5, r * 1.5, -r * 1.5, 0, 0);
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, -r * 4);
+    if (isAttached) {
+      gradient.addColorStop(0, '#ffccd5');
+      gradient.addColorStop(1, '#ff4d6d'); 
+    } else {
+      gradient.addColorStop(0, '#fff0f3');
+      gradient.addColorStop(1, '#ff8fa3'); 
+    }
+    
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.closePath();
+    ctx.restore();
+  };
+
+  // --- EFFECT MASTER: INIȚIALIZARE ȘI COORDOONARE MEDIAPIPE ---
+  useEffect(() => {
+    let active = true;
+    cameraActiveRef.current = true;
+    isFinishedRef.current = false;
+    let handsInstance: Hands;
+
+    const initMasterExercise = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        
+        if (!active || isFinishedRef.current || !cameraActiveRef.current) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+
+        handsInstance = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+
+        handsInstance.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        handsRef.current = handsInstance;
+
+        handsInstance.onResults((results: MediaPipeResults) => {
+          if (!active || isFinishedRef.current || !cameraActiveRef.current) return;
+
+          const canvas = canvasRef.current;
+          const ctx = canvas?.getContext("2d");
+          if (!canvas || !ctx) return;
+
+          const w = canvas.width;
+          const h = canvas.height;
+          const rFlower = centerFlower.radius * w;
+
+          if (!isReady && results.multiHandLandmarks?.[0]) {
+            setIsReady(true);
+            setGhidTerapeutic("🌸 Conexiune AI activă! Prinde petalele de jos cu degetul arătător.");
+            if (!startTimeRef.current) startTimeRef.current = Date.now();
+          }
+
+          if (results.multiHandLandmarks?.[0]) {
+            const landmarks = results.multiHandLandmarks[0];
+            const indexTip = landmarks[8];
+
+            if (indexTip) {
+              handDataRef.current = {
+                visible: true,
+                x: 1 - indexTip.x, 
+                y: indexTip.y,
+              };
+            }
+          } else {
+            handDataRef.current.visible = false;
+          }
+
+          const hand = handDataRef.current;
+
+          if (hand && hand.visible) {
+            let activeId = activePetalIdRef.current;
+
+            petalsRef.current = petalsRef.current.map((petal) => {
+              if (petal.atasata) return petal;
+
+              const distLaDeget = Math.hypot(hand.x - petal.x, hand.y - petal.y);
+
+              if (activeId === null && distLaDeget < 0.075) {
+                activeId = petal.id;
+                activePetalIdRef.current = petal.id;
+                return { ...petal, x: hand.x, y: hand.y };
+              }
+
+              if (activeId === petal.id) {
+                const distLaCentruFloare = Math.hypot(hand.x - centerFlower.x, hand.y - centerFlower.y);
+
+                if (distLaCentruFloare < 0.075) {
+                  activeId = null;
+                  activePetalIdRef.current = null;
+
+                  const totalFixate = petalsRef.current.filter((p) => p.id === petal.id ? true : p.atasata).length;
+                  const scorNou = Math.round((totalFixate / petalsRef.current.length) * 100);
+                  scoreRef.current = scorNou;
+                  setScore(scorNou);
+
+                  if (totalFixate === petalsRef.current.length) {
+                    // Stopăm camera hardware în mod direct
+                    stopCamera();
+                  }
+
+                  return { ...petal, x: centerFlower.x, y: centerFlower.y, atasata: true };
+                }
+
+                return { ...petal, x: hand.x, y: hand.y };
+              }
+
+              return petal;
+            });
+          }
+
+          ctx.clearRect(0, 0, w, h);
+
+          // Contur roz de sus
+          ctx.beginPath();
+          ctx.arc(centerFlower.x * w, centerFlower.y * h, rFlower, 0, 2 * Math.PI);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#ffb7c5';
+          ctx.stroke();
+          ctx.closePath();
+
+          // Petale active
+          petalsRef.current.forEach((petal) => {
+            const rotationAngle = petal.atasata ? petal.angle : 0;
+            drawSakuraPetalGeometry(ctx, petal.x * w, petal.y * h, petal.radius * w, rotationAngle, petal.atasata);
+          });
+
+          // Indicator deget arătător
+          if (hand && hand.visible) {
+            ctx.beginPath();
+            ctx.arc(hand.x * w, hand.y * h, 11, 0, 2 * Math.PI);
+            ctx.fillStyle = activePetalIdRef.current !== null ? '#10b981' : '#4f46e5'; 
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            ctx.closePath();
+            ctx.shadowBlur = 0;
+          }
+        });
+
+        const processVideoFrame = async () => {
+          if (active && cameraActiveRef.current && videoRef.current?.readyState === 4 && !isFinishedRef.current) {
+            try {
+              await handsInstance.send({ image: videoRef.current });
+            } catch (e) {
+              console.log("Senzor oprit.");
+            }
+          }
+          if (active && cameraActiveRef.current && !isFinishedRef.current) {
+            requestRef.current = requestAnimationFrame(processVideoFrame);
+          }
+        };
+        processVideoFrame();
+
+      } catch (err) {
+        console.error("Eroare inițializare master loop:", err);
+        setGhidTerapeutic("❌ Oglinda optică nu a putut fi pornită.");
+      }
+    };
+
+    initMasterExercise();
+
+    return () => {
+      active = false;
+      cameraActiveRef.current = false;
+      isFinishedRef.current = true;
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (handsInstance) {
+        try {
+          handsInstance.close();
+        } catch (e) {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [isReady, stopCamera, handleFinish]);
+
+  if (loadingUser) {
+    return (
+      <SakuraLayout>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', color: '#ff8fa3', fontWeight: 'bold' }}>
+          Se securizează conexiunea...
+        </div>
+      </SakuraLayout>
+    );
+  }
+
+  return (
+    <SakuraLayout>
+      <div style={fullPageWrapper}>
+        <div style={headerContainer}>
+          <div style={scoreBadge}>FLOARE ASAMBLATĂ: {score}%</div>
+          <div style={statusText}>
+            {isReady ? "Senzori AI Activi" : "Se validează modelul optic..."}
+          </div>
+        </div>
+
+        <div style={mainExerciseArea}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={videoStyles}
+          />
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            style={canvasStyles}
+          />
+
+          {!isReady && (
+            <div style={loaderOverlay}>
+              <div className="spinner-sakura" />
+              <p style={{ marginTop: "15px", color: "#64748b", fontWeight: 'bold' }}>
+                {ghidTerapeutic}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {isReady && (
+          <div style={{ width: '100%', maxWidth: '800px', backgroundColor: '#fff', padding: '15px 25px', borderRadius: '16px', border: '1px solid #ffdae1', marginTop: '20px', textAlign: 'center', fontSize: '14px', color: '#ff8fa3', fontWeight: 700 }}>
+            {activePetalIdRef.current !== null ? "👌 Ai prins o petală! Ridică brațul sus și du-o la cerc." : "🖐 Coboară brațul, pune degetul arătător peste o petală de jos și ridic-o!"}
+          </div>
+        )}
+
+        <div style={buttonGroup}>
+          <button onClick={handleCancel} style={btnCancel}>
+            Renunță
+          </button>
+          <button onClick={handleFinish} style={btnFinish} disabled={isSaving}>
+            {isSaving ? "Se salvează..." : "Finalizare Manuală"}
+          </button>
+        </div>
+      </div>
+    </SakuraLayout>
+  );
+}
+
+// --- STILURI MODERNE PREMIUM ---
+const fullPageWrapper: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  padding: "40px",
+  background: '#fffcfd',
+  minHeight: '88vh'
+};
+const headerContainer: CSSProperties = {
+  width: "100%",
+  maxWidth: "800px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: 'center',
+  marginBottom: "20px",
+};
+const mainExerciseArea: CSSProperties = {
+  position: "relative",
+  width: "800px",
+  height: "600px",
+  background: "#1e1b1c",
+  borderRadius: "24px",
+  overflow: "hidden",
+  border: "4px solid #fff0f3",
+  boxShadow: '0 10px 30px rgba(255, 183, 197, 0.15)'
+};
+const videoStyles: CSSProperties = {
+  position: "absolute",
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  transform: "scaleX(-1)", 
+  opacity: 0.45,
+};
+const canvasStyles: CSSProperties = {
+  position: "absolute",
+  width: "100%",
+  height: "100%",
+  zIndex: 5,
+};
+const loaderOverlay: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  background: "#fffcfd",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 10,
+};
+const scoreBadge: CSSProperties = {
+  background: "#ff8fa3",
+  padding: "10px 24px",
+  borderRadius: "12px",
+  color: "white",
+  fontWeight: 800,
+  fontSize: "16px",
+  boxShadow: '0 4px 12px rgba(255, 143, 163, 0.25)'
+};
+const statusText: CSSProperties = {
+  color: "#64748b",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "1px",
+  fontSize: '13px'
+};
+const buttonGroup: CSSProperties = {
+  marginTop: "25px",
+  display: "flex",
+  gap: "15px",
+};
+const btnFinish: CSSProperties = {
+  padding: "15px 40px",
+  background: "#10b981",
+  color: "white",
+  border: "none",
+  borderRadius: "12px",
+  fontWeight: 700,
+  cursor: "pointer",
+  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+};
+const btnCancel: CSSProperties = {
+  padding: "15px 30px",
+  background: "white",
+  color: "#8a7d84",
+  border: "1px solid #ffdae1",
+  borderRadius: "12px",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+</file>
+
+<file path="client/src/pages/patient/MazeExercisePage.tsx">
+import React, { useRef, useEffect, useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
+import SakuraLayout from '../../layouts/SakuraLayout';
+
+// Matricea Labirintului Sakura
+const MAZE_GRID = [
+  [0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+  [1, 0, 1, 0, 1, 0, 1, 1, 1, 0],
+  [1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+  [1, 1, 1, 1, 1, 1, 1, 0, 1, 0],
+  [0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
+  [0, 1, 1, 1, 1, 0, 1, 0, 1, 0],
+  [0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+  [0, 1, 0, 1, 1, 1, 1, 1, 1, 0],
+  [0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+  [1, 1, 0, 0, 0, 1, 1, 0, 0, 2], 
+];
+
+function MazeExercisePage() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const navigate = useNavigate();
+
+  // Stări pacient și control
+  const [idPacient, setIdPacient] = useState<string>("");
+  const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const [isObjectGrabbed, setIsObjectGrabbed] = useState(false);
+  const [collisions, setCollisions] = useState(0);
+  const [exerciseStarted, setExerciseStarted] = useState(false);
+  const [exerciseFinished, setExerciseFinished] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [score, setScore] = useState(100);
+
+  // Setări cercul de control (Obiectul virtual)
+  const [objectPos, setObjectPos] = useState({ x: 25, y: 25 });
+  const objectRadius = 12;
+  const cellSize = 50; 
+
+  // Preluare securizată a ID-ului de utilizator direct la montarea paginii
+  useEffect(() => {
+    const getPatientData = async () => {
+      try {
+        setLoadingUser(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setIdPacient(user.id);
+        }
+      } catch (err) {
+        console.error("Eroare la preluarea utilizatorului din Supabase:", err);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    getPatientData();
+  }, []);
+
+  const checkCollision = (x: number, y: number): boolean => {
+    const cellX = Math.floor(x / cellSize);
+    const cellY = Math.floor(y / cellSize);
+    if (cellX < 0 || cellX >= 10 || cellY < 0 || cellY >= 10) return true;
+    return MAZE_GRID[cellY][cellX] === 1;
+  };
+
+  const checkWin = (x: number, y: number): boolean => {
+    const cellX = Math.floor(x / cellSize);
+    const cellY = Math.floor(y / cellSize);
+    return MAZE_GRID[cellY]?.[cellX] === 2;
+  };
+
+  const salveazaSesiune = async () => {
+    setExerciseFinished(true);
+    const durata = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+
+    let currentUserId = idPacient;
+    if (!currentUserId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      currentUserId = session?.user?.id || "";
+    }
+
+    if (!currentUserId) {
+      alert("Eroare: Utilizatorul nu este autentificat.");
+      return;
+    }
+
+    try {
+      const dataNoua = {
+        id_pacient: currentUserId,
+        tip_exercitiu: "Urmărire Traseu Labirint",
+        scor: Math.round(score), 
+        durata_secunde: durata, // Adăugat pentru a asigura funcționarea feedback-ului din ecranul de felicitări
+        data_finalizare: new Date()
+      };
+
+      const { error } = await supabase
+        .from('progres_pacienti')
+        .insert([dataNoua]);
+
+      if (error) throw error;
+
+      // ALINIERE CRITICĂ: Trimitem cheia 'finalScore' cerută de Congratulations.tsx
+      navigate('/felicitari', { state: { finalScore: Math.round(score) } });
+    } catch (error: any) {
+      console.error("Eroare la salvarea în Supabase:", error);
+      navigate('/felicitari', { state: { finalScore: Math.round(score) } });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!exerciseStarted || exerciseFinished) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const dist = Math.sqrt(Math.pow(mouseX - objectPos.x, 2) + Math.pow(mouseY - objectPos.y, 2));
+
+    if (dist < objectRadius + 25 || isObjectGrabbed) {
+      setIsObjectGrabbed(true);
+      if (!checkCollision(mouseX, mouseY)) {
+        setObjectPos({ x: mouseX, y: mouseY });
+      } else {
+        setCollisions(prev => prev + 1);
+        setScore(prev => Math.max(0, prev - 1));
+      }
+
+      if (checkWin(mouseX, mouseY)) {
+        salveazaSesiune();
+      }
+    }
+  };
+
+  const pornesteExercitiu = () => {
+    setExerciseStarted(true);
+    setExerciseFinished(false);
+    setCollisions(0);
+    setScore(100);
+    setObjectPos({ x: 25, y: 25 }); 
+    setStartTime(Date.now());
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, 500, 500);
+
+    MAZE_GRID.forEach((row, y) => {
+      row.forEach((cell, x) => {
+        if (cell === 1) {
+          ctx.fillStyle = '#4d444a'; 
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        } else if (cell === 2) {
+          ctx.fillStyle = '#10b981'; 
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText("SOSIRE", x * cellSize + 5, y * cellSize + 28);
+        } else {
+          ctx.fillStyle = '#fff5f7'; 
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+        ctx.strokeStyle = '#ffdae1';
+        ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      });
+    });
+
+    ctx.beginPath();
+    ctx.arc(objectPos.x, objectPos.y, objectRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = isObjectGrabbed ? '#ff8fa3' : '#4f46e5';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+  }, [objectPos, isObjectGrabbed]);
+
+  if (loadingUser) {
+    return (
+      <SakuraLayout>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', color: '#ff8fa3', fontWeight: 'bold' }}>
+          Se securizează sesiunea de recuperare...
+        </div>
+      </SakuraLayout>
+    );
+  }
+
+  return (
+    <SakuraLayout>
+      <div style={{ display: 'flex', padding: '40px', gap: '30px', justifyContent: 'center', background: '#fffcfd', minHeight: '85vh' }}>
+        <div style={{ background: '#fff', padding: '15px', borderRadius: '20px', border: '1px solid #fceef1', boxShadow: '0 4px 12px rgba(255, 183, 197, 0.1)' }}>
+          <canvas
+            ref={canvasRef}
+            width={500}
+            height={500}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setIsObjectGrabbed(false)}
+            style={{ borderRadius: '12px', cursor: isObjectGrabbed ? 'grabbing' : 'grab', background: '#fff' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '280px', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'left', backgroundColor: '#fff', padding: '15px', borderRadius: '14px', border: '1px solid #ffdae1' }}>
+            <h3 style={{ color: '#4d444a', margin: '0 0 8px 0', fontSize: '16px', fontWeight: 800 }}>Instrucțiuni:</h3>
+            <p style={{ fontSize: '13px', color: '#8a7d84', margin: 0, lineHeight: '1.4' }}>
+              Apasă pe <strong>Pornește Exercițiul</strong>, apoi prinde cercul albastru cu mouse-ul și ghidează-l cu atenție până la căsuța verde <strong>SOSIRE</strong>, evitând pereții închiși la culoare.
+            </p>
+          </div>
+
+          <button
+            onClick={pornesteExercitiu}
+            style={{ padding: '14px', fontSize: '16px', fontWeight: 'bold', backgroundColor: '#ff8fa3', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 143, 163, 0.2)' }}
+          >
+            {exerciseStarted && !exerciseFinished ? "Resetează" : "Pornește Exercițiul"}
+          </button>
+
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #fceef1' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#4d444a', fontWeight: 700 }}>Evoluție Ședință:</h4>
+            <p style={{ fontSize: '14px', color: '#8a7d84', margin: '6px 0' }}>Control Traseu: <span style={{ fontWeight: 'bold', color: isObjectGrabbed ? '#10b981' : '#e11d48' }}>{isObjectGrabbed ? "ACTIV" : "INACTIV"}</span></p>
+            <p style={{ fontSize: '14px', color: '#8a7d84', margin: '6px 0' }}>Atingeri perete: <span style={{ color: '#e11d48', fontWeight: 'bold' }}>{collisions}</span></p>
+            <p style={{ fontSize: '14px', color: '#8a7d84', margin: '6px 0' }}>Scor Evaluare: <strong>{score}%</strong></p>
+          </div>
+
+          <button
+            onClick={() => navigate('/dashboard')}
+            style={{ padding: '10px', backgroundColor: '#fff', color: '#8a7d84', border: '1px solid #ffdae1', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Renunță / Dashboard
+          </button>
+        </div>
+      </div>
+    </SakuraLayout>
+  );
+}
+
+export { MazeExercisePage };
+export default MazeExercisePage;
+</file>
+
 <file path="client/src/pages/patient/PatientDashboard.tsx">
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7812,6 +8908,11 @@ export default function PatientDashboard() {
   const [fullName, setFullName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [isBtnHovered, setIsBtnHovered] = useState(false);
+
+  // --- STĂRI PENTRU FILTRARE ȘI PAGINARE ---
+  const [activeFilter, setActiveFilter] = useState<string>("Toate");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const sessionsPerPage = 5; // Afișează exact 5 sesiuni pe pagină
 
   useEffect(() => {
     const fetchPatientData = async () => {
@@ -7847,6 +8948,7 @@ export default function PatientDashboard() {
     fetchPatientData();
   }, []);
 
+  // Calcul acuratețe medie globală
   const avgScore =
     sessions.length > 0
       ? Math.round(
@@ -7854,6 +8956,7 @@ export default function PatientDashboard() {
         )
       : 0;
 
+  // Scop săptămânal
   const weeklyGoal = 5;
   const weeklyProgress = Math.min(
     sessions.filter((s) => {
@@ -7863,6 +8966,27 @@ export default function PatientDashboard() {
     }).length,
     weeklyGoal,
   );
+
+  // --- LOGICĂ FILTRARE ȘI PAGINARE ---
+  // 1. Filtrăm sesiunile în funcție de butonul selectat
+  const filteredSessions = sessions.filter((session) => {
+    if (activeFilter === "Toate") return true;
+    return session.tip_exercitiu.toLowerCase().includes(activeFilter.toLowerCase());
+  });
+
+  // Resetează pagina curentă la 1 când utilizatorul schimbă filtrul
+  const handleFilterChange = (filterName: string) => {
+    setActiveFilter(filterName);
+    setCurrentPage(1);
+  };
+
+  // 2. Calculăm indecșii pentru felierea array-ului paginat
+  const indexOfLastSession = currentPage * sessionsPerPage;
+  const indexOfFirstSession = indexOfLastSession - sessionsPerPage;
+  const currentSessions = filteredSessions.slice(indexOfFirstSession, indexOfLastSession);
+
+  // 3. Determinăm numărul total de pagini
+  const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
 
   if (loading)
     return (
@@ -7879,6 +9003,7 @@ export default function PatientDashboard() {
     <SakuraLayout>
       <div style={pageWrapper}>
         <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          
           {/* HEADER */}
           <header style={headerStyle}>
             <div>
@@ -7889,21 +9014,9 @@ export default function PatientDashboard() {
                 Monitorizarea progresului tău în timp real.
               </p>
             </div>
-            <button
-              onClick={() => navigate("/exercitiu")}
-              style={mainActionBtn}
-              onMouseOver={(e) =>
-                (e.currentTarget.style.backgroundColor = "#f472b6")
-              }
-              onMouseOut={(e) =>
-                (e.currentTarget.style.backgroundColor = "#ff8fa3")
-              }
-            >
-              + Sesiune Nouă
-            </button>
           </header>
 
-          {/* BANNER NOU: ANALIZA EVOLUTIE (Transformat în Buton Call-to-Action) */}
+          {/* BANNER: ANALIZA EVOLUTIE */}
           <div
             onClick={() => navigate("/progres")}
             onMouseEnter={() => setIsBtnHovered(true)}
@@ -7922,13 +9035,7 @@ export default function PatientDashboard() {
                 <h3 style={{ margin: 0, fontSize: "18px", color: "#4d444a" }}>
                   Analiza Completă a Evoluției
                 </h3>
-                <p
-                  style={{
-                    margin: "4px 0 0 0",
-                    fontSize: "14px",
-                    color: "#8a7d84",
-                  }}
-                >
+                <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#8a7d84" }}>
                   Consultă rapoartele detaliate și istoricul tău medical.
                 </p>
               </div>
@@ -7947,13 +9054,7 @@ export default function PatientDashboard() {
           {/* OBIECTIV SAPTAMANAL */}
           <section style={challengeBox}>
             <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "10px",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
                 <span style={labelBold}>Activitate Săptămânală</span>
                 <span style={progressText}>
                   {weeklyProgress} / {weeklyGoal} ședințe
@@ -7964,15 +9065,14 @@ export default function PatientDashboard() {
                   style={{
                     ...progressBarFill,
                     width: `${(weeklyProgress / weeklyGoal) * 100}%`,
-                    backgroundColor:
-                      weeklyProgress === weeklyGoal ? "#10b981" : "#ffb7c5",
+                    backgroundColor: weeklyProgress === weeklyGoal ? "#10b981" : "#ffb7c5",
                   }}
                 />
               </div>
             </div>
           </section>
 
-          {/* STATISTICI (Acum sunt doar două, mai aerisite) */}
+          {/* STATISTICI */}
           <div style={statsGrid}>
             <div style={{ ...statCard, borderLeft: "5px solid #ffb7c5" }}>
               <p style={statLabel}>Acuratețe Medie</p>
@@ -7985,240 +9085,569 @@ export default function PatientDashboard() {
             </div>
           </div>
 
-          {/* ISTORIC */}
+          {/* SECTIUNE: SELECTIE TOATE EXERCITIILE */}
+          <div style={exerciseSelectionBox}>
+            <h3 style={sectionTitle}>Programe de Recuperare Disponibile 🌸</h3>
+            <div style={exerciseGrid}>
+              
+              {/* Card Exercițiu 1 */}
+              <div style={exerciseCard}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Coordonare Forme</span>
+                  <span style={exerciseCardDesc}>Potrivirea figurilor geometrice prin translație pe ecran.</span>
+                </div>
+                <button onClick={() => navigate("/exercitiu")} style={startExerciseBtn}>
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 2 */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #a7c9b0" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Prindere Obiecte Virtuale</span>
+                  <span style={exerciseCardDesc}>Antrenarea motricității fine prin gestul de ciupire (Pinch).</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-prindere")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#a7c9b0" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#96b89f")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#a7c9b0")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 3 */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #8b5cf6" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Urmărire Traseu</span>
+                  <span style={exerciseCardDesc}>Controlul stabilității cinematice continue pe puncte de reper.</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-traseu")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#8b5cf6" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#7c4ee4")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#8b5cf6")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
+              {/* Card Exercițiu 4 */}
+              <div style={{ ...exerciseCard, borderTop: "4px solid #f59e0b" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span style={exerciseCardTitle}>Asamblare Floare</span>
+                  <span style={exerciseCardDesc}>Monitorizarea amplitudinii articulare și a rigidității musculare.</span>
+                </div>
+                <button 
+                  onClick={() => navigate("/exercitiu-degete")} 
+                  style={{ ...startExerciseBtn, backgroundColor: "#f59e0b" }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#e08e07")}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#f59e0b")}
+                >
+                  Start ▶
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ISTORIC CU FILTRE ȘI PAGINARE */}
           <div style={activityBox}>
-            <h3 style={sectionTitle}>Istoric Sesiuni</h3>
-            <div style={listWrapper}>
-              {sessions.length > 0 ? (
-                sessions.map((s, i) => (
-                  <div
-                    key={s.id}
+            <div style={historyHeader}>
+              <h3 style={sectionTitle}>Istoric Sesiuni</h3>
+              
+              {/* Grup Butoane de Filtrare */}
+              <div style={filterGroup}>
+                {["Toate", "Forme", "Prindere", "Traseu", "Asamblare Cinematică Floare Sakura"].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => handleFilterChange(f)}
                     style={{
-                      ...sessionRow,
-                      backgroundColor: i % 2 === 0 ? "#ffffff" : "#fffbfc",
-                      borderBottom:
-                        i === sessions.length - 1
-                          ? "none"
-                          : "1px solid #fceef1",
+                      ...filterTabBtn,
+                      backgroundColor: activeFilter === f ? "#ff8fa3" : "#fff",
+                      color: activeFilter === f ? "#fff" : "#8a7d84",
+                      border: activeFilter === f ? "1px solid #ff8fa3" : "1px solid #eef2f5",
                     }}
                   >
-                    <div style={rowInfo}>
-                      <div style={dateBadge}>
-                        {new Date(s.data_finalizare).toLocaleDateString(
-                          "ro-RO",
-                        )}
-                      </div>
-                      <span style={exerciseName}>{s.tip_exercitiu}</span>
-                    </div>
+                    {f === "Forme" ? "Coordonare" : f === "Asamblare Cinematică Floare Sakura" ? "Asamblare Cinematică Floare Sakura" : f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Listă Sesiuni Filtrate și Paginate */}
+            <div style={listWrapper}>
+              {currentSessions.length > 0 ? (
+                <>
+                  {currentSessions.map((s, i) => (
                     <div
+                      key={s.id}
                       style={{
-                        ...scoreBadge,
-                        color: s.scor >= 80 ? "#059669" : "#e11d48",
-                        backgroundColor: s.scor >= 80 ? "#ecfdf5" : "#fff1f2",
+                        ...sessionRow,
+                        backgroundColor: i % 2 === 0 ? "#ffffff" : "#fffbfc",
+                        borderBottom: i === currentSessions.length - 1 ? "none" : "1px solid #fceef1",
                       }}
                     >
-                      {s.scor}%
+                      <div style={rowInfo}>
+                        <div style={dateBadge}>
+                          {new Date(s.data_finalizare).toLocaleDateString("ro-RO")}
+                        </div>
+                        <span style={exerciseName}>{s.tip_exercitiu}</span>
+                      </div>
+                      <div
+                        style={{
+                          ...scoreBadge,
+                          color: s.scor >= 80 ? "#059669" : "#e11d48",
+                          backgroundColor: s.scor >= 80 ? "#ecfdf5" : "#fff1f2",
+                        }}
+                      >
+                        {s.scor}%
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+
+                  {/* CONTROALE PAGINARE (Apar doar dacă avem mai mult de o pagină) */}
+                  {totalPages > 1 && (
+                    <div style={paginationControlRow}>
+                      <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                        style={{
+                          ...paginationBtn,
+                          opacity: currentPage === 1 ? 0.4 : 1,
+                          cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        ← Înapoi
+                      </button>
+                      <span style={pageIndicatorText}>
+                        Pagina {currentPage} din {totalPages}
+                      </span>
+                      <button
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                        style={{
+                          ...paginationBtn,
+                          opacity: currentPage === totalPages ? 0.4 : 1,
+                          cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Înainte →
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div style={emptyState}>
-                  <p style={{ fontWeight: 600, color: "#8a7d84" }}>
-                    Încă nu ai nicio sesiune înregistrată.
+                  <p style={{ fontWeight: 600, color: "#8a7d84", margin: 0 }}>
+                    Nu s-au găsit sesiuni pentru filtrul "{activeFilter}".
                   </p>
                 </div>
               )}
             </div>
           </div>
+
         </div>
       </div>
     </SakuraLayout>
   );
 }
 
-// --- STILURI SAKURA REFINED ---
-const pageWrapper: CSSProperties = {
-  padding: "40px 20px",
-  minHeight: "100vh",
-  background: "#fffcfd",
-};
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "35px",
-};
-const welcomeTitle: CSSProperties = {
-  fontSize: "28px",
-  fontWeight: 800,
-  color: "#4d444a",
-  margin: 0,
-};
-const welcomeSubtitle: CSSProperties = {
-  color: "#b2a4ac",
-  fontSize: "15px",
-  marginTop: "4px",
-};
+// --- STILURI REFINED ȘI NOI ACCESORII DE FILTRARE ---
+const pageWrapper: CSSProperties = { padding: "40px 20px" }; // Eliminat background-ul solid rigid pentru transparență transparentă
+const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "35px" };
+const welcomeTitle: CSSProperties = { fontSize: "28px", fontWeight: 800, color: "#4d444a", margin: 0 };
+const welcomeSubtitle: CSSProperties = { color: "#b2a4ac", fontSize: "15px", marginTop: "4px" };
+const analysisBanner: CSSProperties = { background: "linear-gradient(90deg, #fff 0%, #fff5f7 100%)", padding: "24px", borderRadius: "20px", border: "1px solid #ffdae1", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: "25px", transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)" };
+const analysisIconBox: CSSProperties = { width: "50px", height: "50px", backgroundColor: "#fff", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", boxShadow: "0 2px 8px rgba(255, 143, 163, 0.1)" };
+const arrowCircle: CSSProperties = { width: "40px", height: "40px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold", transition: "all 0.3s ease", border: "1px solid #ffdae1" };
+const challengeBox: CSSProperties = { background: "#ffffff", padding: "20px", borderRadius: "20px", marginBottom: "25px", border: "1px solid #fceef1" };
+const progressBarTrack: CSSProperties = { height: "8px", background: "#fceef1", borderRadius: "4px", overflow: "hidden" };
+const progressBarFill: CSSProperties = { height: "100%", borderRadius: "4px", transition: "width 1s ease-out" };
+const statsGrid: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" };
+const statCard: CSSProperties = { background: "white", padding: "24px", borderRadius: "20px", border: "1px solid #fceef1", boxShadow: "0 2px 10px rgba(0,0,0,0.01)" };
+const statLabel: CSSProperties = { color: "#b2a4ac", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" };
+const statValue: CSSProperties = { fontSize: "32px", fontWeight: 800, color: "#4d444a", margin: "8px 0 0 0" };
+const exerciseSelectionBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1", marginBottom: "30px" };
+const exerciseGrid: CSSProperties = { display: "flex", flexDirection: "column", gap: "14px", marginTop: "15px" };
+const exerciseCard: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", backgroundColor: "#fffafb", border: "1px solid #ffeef2", borderTop: "4px solid #ff8fa3", borderRadius: "14px" };
+const exerciseCardTitle: CSSProperties = { fontWeight: 800, color: "#4d444a", fontSize: "16px" };
+const exerciseCardDesc: CSSProperties = { color: "#8a7d84", fontSize: "13px" };
+const startExerciseBtn: CSSProperties = { padding: "10px 20px", backgroundColor: "#ff8fa3", color: "white", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "14px", cursor: "pointer", transition: "all 0.2s" };
 
-const mainActionBtn: CSSProperties = {
-  padding: "12px 24px",
-  background: "#ff8fa3",
-  color: "white",
-  border: "none",
-  borderRadius: "15px",
-  fontWeight: 700,
-  fontSize: "15px",
-  cursor: "pointer",
-  transition: "all 0.2s ease",
-  boxShadow: "0 4px 12px rgba(255, 143, 163, 0.3)",
-};
+const activityBox: CSSProperties = { background: "white", borderRadius: "20px", padding: "24px", border: "1px solid #fceef1" };
+const historyHeader: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "15px" };
+const filterGroup: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
+const filterTabBtn: CSSProperties = { padding: "6px 14px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s ease" };
 
-const analysisBanner: CSSProperties = {
-  background: "linear-gradient(90deg, #fff 0%, #fff5f7 100%)",
-  padding: "24px",
-  borderRadius: "20px",
-  border: "1px solid #ffdae1",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  cursor: "pointer",
-  marginBottom: "25px",
-  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-};
-
-const analysisIconBox: CSSProperties = {
-  width: "50px",
-  height: "50px",
-  backgroundColor: "#fff",
-  borderRadius: "12px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "24px",
-  boxShadow: "0 2px 8px rgba(255, 143, 163, 0.1)",
-};
-
-const arrowCircle: CSSProperties = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "18px",
-  fontWeight: "bold",
-  transition: "all 0.3s ease",
-  border: "1px solid #ffdae1",
-};
-
-const challengeBox: CSSProperties = {
-  background: "#ffffff",
-  padding: "20px",
-  borderRadius: "20px",
-  marginBottom: "25px",
-  border: "1px solid #fceef1",
-};
-
-const progressBarTrack: CSSProperties = {
-  height: "8px",
-  background: "#fceef1",
-  borderRadius: "4px",
-  overflow: "hidden",
-};
-const progressBarFill: CSSProperties = {
-  height: "100%",
-  borderRadius: "4px",
-  transition: "width 1s ease-out",
-};
-
-const statsGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "20px",
-  marginBottom: "30px",
-};
-const statCard: CSSProperties = {
-  background: "white",
-  padding: "24px",
-  borderRadius: "20px",
-  border: "1px solid #fceef1",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.01)",
-};
-
-const statLabel: CSSProperties = {
-  color: "#b2a4ac",
-  fontSize: "12px",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-const statValue: CSSProperties = {
-  fontSize: "32px",
-  fontWeight: 800,
-  color: "#4d444a",
-  margin: "8px 0 0 0",
-};
-
-const activityBox: CSSProperties = {
-  background: "white",
-  borderRadius: "20px",
-  padding: "24px",
-  border: "1px solid #fceef1",
-};
-const sectionTitle: CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 800,
-  color: "#4d444a",
-  marginBottom: "20px",
-};
-const listWrapper: CSSProperties = {
-  borderRadius: "15px",
-  overflow: "hidden",
-  border: "1px solid #fceef1",
-};
-const sessionRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "14px 18px",
-};
-const rowInfo: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "15px",
-};
-const dateBadge: CSSProperties = {
-  background: "#fff5f7",
-  color: "#ff8fa3",
-  padding: "4px 10px",
-  borderRadius: "8px",
-  fontSize: "12px",
-  fontWeight: 700,
-};
+const sectionTitle: CSSProperties = { fontSize: "18px", fontWeight: 800, color: "#4d444a", margin: 0 };
+const listWrapper: CSSProperties = { borderRadius: "15px", overflow: "hidden", border: "1px solid #fceef1", marginTop: "15px" };
+const sessionRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px" };
+const rowInfo: CSSProperties = { display: "flex", alignItems: "center", gap: "15px" };
+const dateBadge: CSSProperties = { background: "#fff5f7", color: "#ff8fa3", padding: "4px 10px", borderRadius: "8px", fontSize: "12px", fontWeight: 700 };
 const exerciseName: CSSProperties = { fontWeight: 600, color: "#4d444a" };
-const scoreBadge: CSSProperties = {
-  fontWeight: 800,
-  fontSize: "14px",
-  padding: "6px 12px",
-  borderRadius: "10px",
-};
-
-const emptyState: CSSProperties = {
-  textAlign: "center",
-  padding: "40px",
-  color: "#b2a4ac",
-};
+const scoreBadge: CSSProperties = { fontWeight: 800, fontSize: "14px", padding: "6px 12px", borderRadius: "10px" };
+const emptyState: CSSProperties = { textAlign: "center", padding: "40px", color: "#b2a4ac" };
 const centeredStyle: CSSProperties = { textAlign: "center", marginTop: "30vh" };
-const labelBold: CSSProperties = {
-  fontWeight: 700,
-  color: "#8a7d84",
-  fontSize: "14px",
-};
-const progressText: CSSProperties = {
-  fontWeight: 800,
-  color: "#ffb7c5",
-  fontSize: "14px",
-};
+const labelBold: CSSProperties = { fontWeight: 700, color: "#8a7d84", fontSize: "14px" };
+const progressText: CSSProperties = { fontWeight: 800, color: "#ffb7c5", fontSize: "14px" };
+
+// Stiluri specifice pentru bara de paginare
+const paginationControlRow: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", backgroundColor: "#fffafb", borderTop: "1px solid #fceef1" };
+const paginationBtn: CSSProperties = { padding: "6px 14px", backgroundColor: "white", border: "1px solid #eef2f5", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "#8a7d84", transition: "all 0.2s" };
+const pageIndicatorText: CSSProperties = { fontSize: "13px", fontWeight: "700", color: "#b2a4ac" };
+</file>
+
+<file path="client/src/pages/patient/PinchExercisePage.tsx">
+import React, { useRef, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Hands, HAND_CONNECTIONS } from "@mediapipe/hands";
+import { drawConnectors } from "@mediapipe/drawing_utils";
+import { supabase } from "../../supabaseClient";
+import SakuraLayout from "../../layouts/SakuraLayout";
+import type { CSSProperties } from "react";
+
+interface HandData {
+  pinch: boolean;
+  x: number;
+  y: number;
+  landmarks: any;
+}
+
+interface MediaPipeResults {
+  multiHandLandmarks: any[];
+}
+
+export default function PinchExercisePage() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const handsInstanceRef = useRef<Hands | null>(null);
+  const navigate = useNavigate();
+
+  // Stări pacient și control (Identice cu modelul tău din Labirint)
+  const [idPacient, setIdPacient] = useState<string>("");
+  const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const [isObjectGrabbed, setIsObjectGrabbed] = useState(false);
+  const [exerciseStarted, setExerciseStarted] = useState(false);
+  const [exerciseFinished, setExerciseFinished] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [score, setScore] = useState(0);
+
+  // Referințe stabile pentru păstrarea coordonatelor și calcul kinetic la 60 FPS
+  const objectPosRef = useRef({ x: 0.25, y: 0.3 }); 
+  const basketPosRef = useRef({ x: 0.75, y: 0.5 }); 
+  const currentHandDataRef = useRef<HandData | null>(null);
+  const internalScoreRef = useRef(0);
+  const isFinishedFlagRef = useRef(false);
+
+  // Preluare securizată a ID-ului din Supabase
+  useEffect(() => {
+    const getPatientData = async () => {
+      try {
+        setLoadingUser(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setIdPacient(user.id);
+        }
+      } catch (err) {
+        console.error("Eroare la preluarea utilizatorului din Supabase:", err);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    getPatientData();
+  }, []);
+
+  const genereazaPozitieAleatorieFloare = () => {
+    objectPosRef.current = {
+      x: 0.15 + Math.random() * 0.3, 
+      y: 0.2 + Math.random() * 0.6,  
+    };
+    setIsObjectGrabbed(false);
+  };
+
+  const stopCameraComplet = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+
+    if (handsInstanceRef.current) {
+      try {
+        handsInstanceRef.current.close();
+      } catch (e) {
+        console.error("Eroare eliberare instanță MediaPipe:", e);
+      }
+      handsInstanceRef.current = null;
+    }
+  };
+
+  // REPARAT RADICAL: Navigare instantanee, urmată de curățare asincronă în fundal
+  const salveazaSesiune = async () => {
+    if (isFinishedFlagRef.current) return;
+    isFinishedFlagRef.current = true;
+    setExerciseFinished(true);
+
+    const scorDeTrimis = Math.round(internalScoreRef.current);
+    const durata = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+
+    // 1. SCHIMBĂM PAGINA INSTANTANEU (Ocolim orice crash hardware din React)
+    navigate('/felicitari', { state: { finalScore: scorDeTrimis }, replace: true });
+
+    // 2. Executăm oprirea camerei și salvarea datelor silențios, pe fundal
+    try {
+      stopCameraComplet();
+      
+      let currentUserId = idPacient;
+      if (!currentUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUserId = session?.user?.id || "";
+      }
+
+      if (currentUserId) {
+        await supabase.from('progres_pacienti').insert([{
+          id_pacient: currentUserId,
+          tip_exercitiu: "Prindere Obiecte Virtuale",
+          scor: scorDeTrimis,
+          durata_secunde: durata,
+          data_finalizare: new Date().toISOString()
+        }]);
+      }
+    } catch (error) {
+      console.error("Eroare asincronă salvare fundal:", error);
+    }
+  };
+
+  const pornesteExercitiu = () => {
+    setExerciseStarted(true);
+    setExerciseFinished(false);
+    internalScoreRef.current = 0;
+    setScore(0);
+    isFinishedFlagRef.current = false;
+    objectPosRef.current = { x: 0.25, y: 0.3 };
+    setStartTime(Date.now());
+  };
+
+  // --- 1. CONFIGURARE SENZORI ȘI CONEXIUNE MEDIAPIPE ---
+  useEffect(() => {
+    let active = true;
+    let hands: Hands;
+
+    const initMediaPipe = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+
+        hands = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+        handsInstanceRef.current = hands;
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        hands.onResults((results: MediaPipeResults) => {
+          if (!active || isFinishedFlagRef.current) return;
+
+          if (results.multiHandLandmarks?.[0]) {
+            const landmarks = results.multiHandLandmarks[0];
+            const isPinching = Math.hypot(
+              landmarks[4].x - landmarks[8].x,
+              landmarks[4].y - landmarks[8].y
+            ) < 0.045;
+
+            currentHandDataRef.current = {
+              pinch: isPinching,
+              x: 1 - (landmarks[4].x + landmarks[8].x) / 2, 
+              y: (landmarks[4].y + landmarks[8].y) / 2,
+              landmarks: landmarks,
+            };
+          } else {
+            currentHandDataRef.current = null;
+          }
+        });
+
+        const processVideoFrame = async () => {
+          if (active && videoRef.current?.readyState === 4 && !isFinishedFlagRef.current) {
+            await hands.send({ image: videoRef.current });
+          }
+          if (active && !isFinishedFlagRef.current) {
+            requestAnimationFrame(processVideoFrame);
+          }
+        };
+        processVideoFrame();
+
+      } catch (err) {
+        console.error("Eroare inițializare cameră / MediaPipe:", err);
+      }
+    };
+
+    initMediaPipe();
+    return () => {
+      active = false;
+      stopCameraComplet();
+    };
+  }, []);
+
+  // --- 2. ENGINE GRAFICĂ ȘI LOGICĂ INTERACTIVĂ (CANVAS 2D) ---
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+
+    const renderLoop = () => {
+      if (isFinishedFlagRef.current) return;
+
+      const hand = currentHandDataRef.current;
+      const floare = objectPosRef.current;
+      const cos = basketPosRef.current;
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const razaFloare = 0.04 * width;
+      const razaCos = 0.07 * width;
+
+      if (exerciseStarted && !isFinishedFlagRef.current && hand) {
+        const distantaPanaLaFloare = Math.hypot(hand.x - floare.x, hand.y - floare.y);
+
+        if (distantaPanaLaFloare < 0.06 && hand.pinch) {
+          setIsObjectGrabbed(true);
+        }
+
+        if (hand.pinch && (distantaPanaLaFloare < 0.06 || isObjectGrabbed)) {
+          floare.x = hand.x;
+          floare.y = hand.y;
+
+          const distantaPanaLaCos = Math.hypot(floare.x - cos.x, floare.y - cos.y);
+          if (distantaPanaLaCos < 0.07) {
+            internalScoreRef.current = Math.min(100, internalScoreRef.current + 20);
+            setScore(internalScoreRef.current);
+
+            if (internalScoreRef.current >= 100) {
+              salveazaSesiune();
+              return;
+            } else {
+              genereazaPozitieAleatorieFloare();
+            }
+          }
+        } else {
+          setIsObjectGrabbed(false);
+        }
+      }
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Coș de colectare
+      ctx.beginPath();
+      ctx.arc(cos.x * width, cos.y * height, razaCos, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(255, 143, 163, 0.15)";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#ff8fa3";
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+
+      ctx.fillStyle = "#ff8fa3";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("COȘ COLECTARE", cos.x * width, cos.y * height);
+
+      // Floare virtuală
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(floare.x * width, floare.y * height, razaFloare, 0, 2 * Math.PI);
+      ctx.fillStyle = hand?.pinch && (Math.hypot(hand.x - floare.x, hand.y - floare.y) < 0.06 || isObjectGrabbed) ? "#ff4d6d" : "#ff8fa3";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "16px sans-serif";
+      ctx.fillText("🌸", floare.x * width, floare.y * height);
+
+      // Schelet MediaPipe
+      if (hand && hand.landmarks) {
+        const mirroredLandmarks = hand.landmarks.map((l: any) => ({ ...l, x: 1 - l.x }));
+        drawConnectors(ctx, mirroredLandmarks, HAND_CONNECTIONS, {
+          color: hand.pinch ? "#10b981" : "#ffffff",
+          lineWidth: 4,
+        });
+      }
+
+      animationFrameId = requestAnimationFrame(renderLoop);
+    };
+
+    renderLoop();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [exerciseStarted, isObjectGrabbed]);
+
+  if (loadingUser) {
+    return (
+      <SakuraLayout>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', color: '#ff8fa3', fontWeight: 'bold' }}>
+          Se securizează sesiunea de recuperare...
+        </div>
+      </SakuraLayout>
+    );
+  }
+
+  return (
+    <SakuraLayout>
+      <div style={{ display: 'flex', padding: '40px', gap: '30px', justifyContent: 'center', minHeight: '85vh' }}>
+        
+        <div style={{ background: '#fff', padding: '15px', borderRadius: '20px', border: '1px solid #fceef1', boxShadow: '0 4px 12px rgba(255, 183, 197, 0.1)', position: 'relative', width: '640px', height: '480px' }}>
+          <video ref={videoRef} autoPlay playsInline muted style={{ position: 'absolute', top: 15, left: 15, width: '640px', height: '480px', objectFit: 'cover', transform: 'scaleX(-1)', opacity: 0.4, borderRadius: '12px' }} />
+          <canvas ref={canvasRef} width={640} height={480} style={{ position: 'absolute', top: 15, left: 15, borderRadius: '12px', zIndex: 2 }} />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '280px', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'left', backgroundColor: '#fff', padding: '15px', borderRadius: '14px', border: '1px solid #ffdae1' }}>
+            <h3 style={{ color: '#4d444a', margin: '0 0 8px 0', fontSize: '16px', fontWeight: 800 }}>Instrucțiuni:</h3>
+            <p style={{ fontSize: '13px', color: '#8a7d84', margin: 0, lineHeight: '1.4' }}>
+              Apasă pe <strong>Pornește Exercițiul</strong>, apoi apropie degetul mare de cel arătător peste floarea de Sakura pentru a o prinde și ghideaz-o în <strong>COȘUL DE COLECTARE</strong>.
+            </p>
+          </div>
+
+          <button
+            onClick={pornesteExercitiu}
+            style={{ padding: '14px', fontSize: '16px', fontWeight: 'bold', backgroundColor: '#ff8fa3', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 143, 163, 0.2)' }}
+          >
+            {exerciseStarted && !exerciseFinished ? "Resetează" : "Pornește Exercițiul"}
+          </button>
+
+          <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '16px', border: '1px solid #fceef1' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#4d444a', fontWeight: 700 }}>Evoluție Ședință:</h4>
+            <p style={{ fontSize: '14px', color: '#8a7d84', margin: '6px 0' }}>Control Traseu: <span style={{ fontWeight: 'bold', color: isObjectGrabbed ? '#10b981' : '#e11d48' }}>{isObjectGrabbed ? "ACTIV" : "INACTIV"}</span></p>
+            <p style={{ fontSize: '14px', color: '#8a7d84', margin: '6px 0' }}>Scor Evaluare: <strong>{score}%</strong></p>
+          </div>
+
+          <button
+            onClick={() => { stopCameraComplet(); navigate('/dashboard'); }}
+            style={{ padding: '10px', backgroundColor: '#fff', color: '#8a7d84', border: '1px solid #ffdae1', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Renunță / Dashboard
+          </button>
+        </div>
+
+      </div>
+    </SakuraLayout>
+  );
+}
 </file>
 
 <file path="client/src/pages/patient/ProgressPage.tsx">
@@ -8231,12 +9660,19 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { CSSProperties } from 'react';
 
-interface SessionData { date: string; scor: number; timestamp: Date; }
+interface SessionData { 
+  id: string;
+  date: string; 
+  scor: number; 
+  timestamp: Date; 
+  tip_exercitiu: string;
+  durata_secunde: number;
+}
 type FilterType = 'zile' | 'saptamani' | 'luni';
 
 interface CerereDoctor {
   id: string;
-  id_medic: string; // Sincronizat perfect cu poza ta din Supabase
+  id_medic: string; 
   nume_doctor: string;
 }
 
@@ -8249,6 +9685,14 @@ export default function ProgressPage() {
   const [analizaAI, setAnalizaAI] = useState<string>("");
   const [loadingAI, setLoadingAI] = useState<boolean>(false);
   const [userNume, setUserNume] = useState<string>("Pacient");
+
+  // State-uri pentru Filtrare și Paginare Tabel
+  const [filtruExercitiu, setFiltruExercitiu] = useState<string>('all');
+  const [filtruScor, setFiltruScor] = useState<string>('all'); 
+  const [ordonareData, setOrdonareData] = useState<'desc' | 'asc'>('desc');
+  const [paginaCurenta, setPaginaCurenta] = useState<number>(1);
+  const randuriPePagina = 5; 
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -8261,10 +9705,9 @@ export default function ProgressPage() {
           const numeIdentificat = user.user_metadata?.nume || user.user_metadata?.full_name || "Pacient";
           setUserNume(numeIdentificat);
 
-          // 1. Încărcăm istoricul sesiunilor (id_pacient)
           const { data: sessions, error } = await supabase
             .from('progres_pacienti')
-            .select('data_finalizare, scor')
+            .select('id, data_finalizare, scor, tip_exercitiu, durata_secunde')
             .eq('id_pacient', user.id)
             .order('data_finalizare', { ascending: true });
 
@@ -8272,31 +9715,33 @@ export default function ProgressPage() {
 
           if (sessions) {
             setRawData(sessions.map(s => ({
+              id: s.id,
               timestamp: new Date(s.data_finalizare),
               date: new Date(s.data_finalizare).toLocaleDateString('ro-RO'),
-              scor: Number(s.scor)
+              scor: Number(s.scor),
+              tip_exercitiu: s.tip_exercitiu || "Coordonare Forme",
+              durata_secunde: s.durata_secunde || 0
             })));
           }
 
-          // 2. POTRIVIT PERFECT DUPĂ POZA TA: id_pacient și id_medic
           const { data: relatiiData, error: relatiiError } = await supabase
             .from('relatii_pacienti')
-            .select('id, id_medic') // Schimbat în id_medic conform tabelului tău real
-            .eq('id_pacient', user.id) // Schimbat în id_pacient
+            .select('id, id_medic') 
+            .eq('id_pacient', user.id) 
             .eq('status', 'pending');
 
           if (!relatiiError && relatiiData && relatiiData.length > 0) {
             const cereriCuNume = await Promise.all(
-              relatiiData.map(async (r: any) => {
+              relatiiData.map(async (r: { id_medic: string; id: string }) => {
                 const { data: docData } = await supabase
                   .from('doctori')
-                  .select('nume')
-                  .eq('id', r.id_medic) // Folosim id_medic
+                  .select('full_name') 
+                  .eq('id', r.id_medic) 
                   .single();
                 return {
                   id: r.id,
                   id_medic: r.id_medic,
-                  nume_doctor: docData?.nume || "Medic Specialist"
+                  nume_doctor: docData?.full_name || "Medic Specialist"
                 };
               })
             );
@@ -8333,6 +9778,35 @@ export default function ProgressPage() {
     return Object.values(groups).map(g => ({ name: g.label, scor: Math.round(g.totalScor/g.count) }));
   }, [rawData, filter]);
 
+  const dateTabelFiltrate = useMemo(() => {
+    let rezultate = [...rawData];
+
+    if (filtruExercitiu !== 'all') {
+      rezultate = rezultate.filter(s => s.tip_exercitiu === filtruExercitiu);
+    }
+
+    if (filtruScor === 'high') {
+      rezultate = rezultate.filter(s => s.scor >= 70);
+    } else if (filtruScor === 'low') {
+      rezultate = rezultate.filter(s => s.scor < 70);
+    }
+
+    rezultate.sort((a, b) => {
+      const timeA = a.timestamp.getTime();
+      const timeB = b.timestamp.getTime();
+      return ordonareData === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+
+    return rezultate;
+  }, [rawData, filtruExercitiu, filtruScor, ordonareData]);
+
+  const totalPagini = Math.ceil(dateTabelFiltrate.length / randuriPePagina) || 1;
+  const paginaSigura = paginaCurenta > totalPagini ? 1 : paginaCurenta;
+  
+  const indexUltimulRand = paginaSigura * randuriPePagina;
+  const indexPrimulRand = indexUltimulRand - randuriPePagina;
+  const randuriPaginaCurenta = dateTabelFiltrate.slice(indexPrimulRand, indexUltimulRand);
+
   const gestioneazaCerere = async (idRelatie: string, statusNou: 'acceptat' | 'respins') => {
     try {
       const { error } = await supabase
@@ -8348,41 +9822,77 @@ export default function ProgressPage() {
     }
   };
 
+  // --- COD ASINCRON ABSOLUT CORECT ȘI SINCRONIZAT PE ID CU SERVERUL ---
   const genereazaRaportAI = async () => {
     if (rawData.length === 0) return;
     setLoadingAI(true);
     setAnalizaAI("");
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
-      const istoricSimplificat = rawData.map(s => ({
-        data: String(s.date),
-        scor_acuratete: Number(s.scor)
-      }));
+      const { data: { user } } = await supabase.auth.getUser();
 
       const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pacientNume: String(userNume),
-          istoric: istoricSimplificat
+          id_pacient: user?.id, // Sincronizat perfect în 'id_pacient'
+          pacientNume: String(userNume)
         })
       });
 
       const data = await res.json();
-      
       if (res.ok && data.success) {
-        // Citire directă a textului din răspunsul curat al serverului
-        setAnalizaAI(data.analysis || data.text || JSON.stringify(data));
+        setAnalizaAI(data.analysis || data.rezumat);
       } else {
-        setAnalizaAI(`Eroare de comunicare AI: ${data.message || "Verificați terminalul de backend."}`);
+        setAnalizaAI(`Eroare AI: ${data.error || "Eroare de procesare."}`);
       }
     } catch (err) {
-      console.error("Eroare raport AI:", err);
+      console.error("Eroare raport AI pacient:", err);
       setAnalizaAI("Eroare de rețea la conectarea cu serverul AI.");
     } finally {
       setLoadingAI(false);
     }
+  };
+
+  const formatAiReport = (text: string) => {
+    return text
+      .split('\n')
+      .filter((linie) => linie.trim().length > 0)
+      .map((linie, index) => {
+        const esteTitlu = /^\[.*\]$/.test(linie.trim());
+        const esteBullet = /^•\s*/.test(linie.trim());
+
+        return (
+          <div
+            key={`${linie}-${index}`}
+            style={{
+              marginBottom: '8px',
+              padding: esteBullet ? '8px 10px' : '6px 0',
+              borderRadius: '12px',
+              background: esteBullet ? 'linear-gradient(135deg, #fff7f9 0%, #ffffff 100%)' : 'transparent',
+              border: esteBullet ? '1px solid #ffe8ef' : 'none',
+              color: '#4d444a',
+              lineHeight: 1.6,
+            }}
+          >
+            {esteTitlu ? (
+              <strong style={{ color: '#ff8fa3', fontSize: '14px', display: 'block', marginBottom: '2px' }}>{linie.trim()}</strong>
+            ) : (
+              <span style={{ display: 'inline-block', paddingLeft: esteBullet ? '2px' : '0' }}>{linie.trim().replace(/^•\s*/, '')}</span>
+            )}
+          </div>
+        );
+      });
+  };
+
+  const getExerciseBadge = (tip: string) => {
+    const palette: Record<string, { bg: string; color: string }> = {
+      'Coordonare Forme': { bg: '#fff1f5', color: '#be185d' },
+      'Urmărire Traseu Labirint': { bg: '#eef2ff', color: '#4338ca' },
+      'Asamblare Cinematică Floare Sakura': { bg: '#ecfeff', color: '#0f766e' },
+      'Prindere Obiecte Virtuale': { bg: '#f0fdf4', color: '#15803d' },
+    };
+    return palette[tip] || { bg: '#fff7ed', color: '#c2410c' };
   };
 
   const exportPDF = async () => {
@@ -8412,13 +9922,12 @@ export default function ProgressPage() {
     <SakuraLayout>
       <div style={pageContainerStyle}>
         
-        {/* Banner Solicitări Doctori */}
         {cereri.length > 0 && (
           <div style={{ marginBottom: '25px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
             {cereri.map(c => (
               <div key={c.id} style={bannerDoctorStyle}>
                 <p style={{ margin: 0, fontWeight: 600, color: '#4d444a', fontSize: '15px' }}>
-                  Doctorul <span style={{ color: '#ff8fa3', fontWeight: 800 }}>{c.nume_doctor}</span> dorește să vă monitorizeze progresul și evoluția clinică.
+                  Doctorul <span style={{ color: '#ff8fa3', fontWeight: 800 }}>{c.nume_doctor}</span> dorește să vă monitorizeze progresul.
                 </p>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button onClick={() => gestioneazaCerere(c.id, 'acceptat')} style={acceptBtnStyle}>Acceptă</button>
@@ -8463,13 +9972,8 @@ export default function ProgressPage() {
           <div style={chartCardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
               <h3 style={{ color: '#ff8fa3', margin: 0, fontSize: '18px', fontWeight: 800 }}>Progres Acuratețe (%)</h3>
-              
               {rawData.length > 0 && (
-                <button 
-                  onClick={genereazaRaportAI} 
-                  disabled={loadingAI} 
-                  style={aiTriggerBtnStyle}
-                >
+                <button onClick={genereazaRaportAI} disabled={loadingAI} style={aiTriggerBtnStyle}>
                   {loadingAI ? '🌸 Se analizează...' : '✨ Interpretare Clinică AI'}
                 </button>
               )}
@@ -8489,14 +9993,7 @@ export default function ProgressPage() {
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#8a7d84', fontSize: 12}} />
                     <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{fill: '#8a7d84', fontSize: 12}} />
                     <Tooltip contentStyle={{ borderRadius: '15px', border: 'none', boxShadow: '0 5px 15px rgba(0,0,0,0.05)' }} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="scor" 
-                      stroke="#ff8fa3" 
-                      fillOpacity={1} 
-                      fill="url(#colorScor)" 
-                      strokeWidth={4} 
-                    />
+                    <Area type="monotone" dataKey="scor" stroke="#ff8fa3" fillOpacity={1} fill="url(#colorScor)" strokeWidth={4} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -8504,20 +10001,110 @@ export default function ProgressPage() {
               )}
             </div>
 
-            {loadingAI && (
+            {analizaAI && (
               <div style={aiResponseBoxStyle}>
-                <div style={{ color: '#ff8fa3', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>🌸</span> Inteligența Artificială evaluează trendurile pentru a identifica evoluția sau involuția stării motorii...
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>🌸</span>
+                  <div>
+                    <div style={{ fontWeight: 900, color: '#ff8fa3', fontSize: '14px' }}>Raport clar și ușor de citit</div>
+                    <div style={{ fontSize: '12px', color: '#8a7d84', fontWeight: 600 }}>Rezumatul AI este prezentat în secțiuni simple, pentru o înțelegere rapidă.</div>
+                  </div>
+                </div>
+                <div style={{ lineHeight: '1.7', color: '#4d444a', whiteSpace: 'pre-line', wordBreak: 'break-word' }}>
+                  {formatAiReport(analizaAI)}
                 </div>
               </div>
             )}
+          </div>
 
-            {analizaAI && !loadingAI && (
-              <div style={aiResponseBoxStyle}>
-                <div style={{ fontWeight: 900, color: '#ff8fa3', marginBottom: '8px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  🤖 Evaluare Inteligentă a Graficului:
-                </div>
-                <div style={{ lineHeight: '1.6', color: '#4d444a', whiteSpace: 'pre-line' }}>{analizaAI}</div>
+          {/* Tabel Istoric Paginat de Jos */}
+          <div style={tabelSectiuneStyle}>
+            <div style={tabelFiltreHeaderStyle}>
+              <h3 style={{ color: '#4d444a', margin: 0, fontSize: '18px', fontWeight: 800 }}>Istoric Detaliat Sesiuni 📋</h3>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <select value={filtruExercitiu} onChange={(e) => { setFiltruExercitiu(e.target.value); setPaginaCurenta(1); }} style={selectStyle}>
+                  <option value="all">Toate exercițiile</option>
+                  <option value="Coordonare Forme">Coordonare Forme</option>
+                  <option value="Urmărire Traseu">Urmărire Traseu</option>
+                  <option value="Flexie Degete">Flexie Degete</option>
+                </select>
+                <select value={filtruScor} onChange={(e) => { setFiltruScor(e.target.value); setPaginaCurenta(1); }} style={selectStyle}>
+                  <option value="all">Toate scorurile</option>
+                  <option value="high">Scor mare (≥ 70%)</option>
+                  <option value="low">Scor mic (&lt; 70%)</option>
+                </select>
+                <select value={ordonareData} onChange={(e) => setOrdonareData(e.target.value as 'desc' | 'asc')} style={selectStyle}>
+                  <option value="desc">Cele mai recente</option>
+                  <option value="asc">Cele mai vechi</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr style={{ backgroundColor: '#ff8fa3', color: 'white' }}>
+                    <th style={thStyle}>Tip Exercițiu</th>
+                    <th style={thStyle}>Scor</th>
+                    <th style={thStyle}>Durată</th>
+                    <th style={thStyle}>Data Finalizării</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {randuriPaginaCurenta.length > 0 ? (
+                    randuriPaginaCurenta.map((sesiune) => (
+                      <tr key={sesiune.id} style={trStyle}>
+                        <td style={tdStyle}>
+                          <span style={{
+                            ...badgeChip,
+                            backgroundColor: getExerciseBadge(sesiune.tip_exercitiu).bg,
+                            color: getExerciseBadge(sesiune.tip_exercitiu).color,
+                          }}>
+                            {sesiune.tip_exercitiu}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={{
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            backgroundColor: '#fff7f9',
+                            color: '#ff8fa3',
+                            border: '1px solid #ffeef2'
+                          }}>
+                            {sesiune.scor}%
+                          </span>
+                        </td>
+                        <td style={tdStyle}>{sesiune.durata_secunde} secunde</td>
+                        <td style={tdStyle}>{sesiune.date}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} style={{ ...tdStyle, textAlign: 'center', color: '#8a7d84', padding: '30px' }}>
+                        Nu s-au găsit sesiuni.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPagini > 1 && (
+              <div style={paginareContainerStyle}>
+                <button onClick={() => setPaginaCurenta(p => Math.max(p - 1, 1))} disabled={paginaSigura === 1} style={paginareNavBtnStyle}>Anterior</button>
+                {Array.from({ length: totalPagini }, (_, i) => (
+                  <button key={i + 1} onClick={() => setPaginaCurenta(i + 1)}
+                    style={{
+                      ...paginareNumarBtnStyle,
+                      backgroundColor: paginaSigura === i + 1 ? '#ff8fa3' : 'white',
+                      color: paginaSigura === i + 1 ? 'white' : '#4d444a',
+                      border: paginaSigura === i + 1 ? '1px solid #ff8fa3' : '1px solid #ffeef2'
+                    }}
+                  >{i + 1}</button>
+                ))}
+                <button onClick={() => setPaginaCurenta(p => Math.min(p + 1, totalPagini))} disabled={paginaSigura === totalPagini} style={paginareNavBtnStyle}>Următor</button>
               </div>
             )}
           </div>
@@ -8528,25 +10115,49 @@ export default function ProgressPage() {
   );
 }
 
-// --- STILURI ---
+// --- CONFIGURAȚII STILURI INLINE ---
 const pageContainerStyle: CSSProperties = { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' };
 const centeredStyle: CSSProperties = { textAlign: 'center', padding: '100px', color: '#ff8fa3', fontWeight: 800 };
-const headerStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', width: '100%' };
-const reportContainerStyle: CSSProperties = { backgroundColor: 'white', padding: '35px', borderRadius: '40px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', gap: '25px', width: '100%', boxSizing: 'border-box' };
-const filterGroupStyle: CSSProperties = { display: 'flex', gap: '10px', marginBottom: '15px', justifyContent: 'center', width: '100%' };
-const chartCardStyle: CSSProperties = { backgroundColor: '#fffafb', padding: '25px', borderRadius: '25px', border: '1px solid #fff0f3', display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' };
-const chartWrapperStyle: CSSProperties = { position: 'relative', width: '100%', height: '380px', minWidth: '100%', display: 'block' };
+const headerStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' };
+const reportContainerStyle: CSSProperties = { backgroundColor: 'white', padding: '35px', borderRadius: '40px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', gap: '25px' };
+const filterGroupStyle: CSSProperties = { display: 'flex', gap: '10px', marginBottom: '15px', justifyContent: 'center' };
+const chartCardStyle: CSSProperties = { backgroundColor: '#fffafb', padding: '25px', borderRadius: '25px', border: '1px solid #fff0f3', display: 'flex', flexDirection: 'column' };
+const chartWrapperStyle: CSSProperties = { position: 'relative', width: '100%', height: '380px' };
 const filterBtnStyle: CSSProperties = { padding: '10px 25px', borderRadius: '15px', cursor: 'pointer', fontWeight: 800, transition: 'all 0.3s ease' };
 const exportBtnStyle: CSSProperties = { padding: '12px 25px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '15px', fontWeight: 800, cursor: 'pointer' };
 const backBtnStyle: CSSProperties = { padding: '12px 25px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '15px', fontWeight: 700, cursor: 'pointer' };
-const emptyStateStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8a7d84', fontStyle: 'italic', width: '100%' };
-
-const bannerDoctorStyle: CSSProperties = { backgroundColor: 'white', border: '1px solid #ff8fa3', padding: '15px 25px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(255,143,163,0.08)', width: '100%', boxSizing: 'border-box' };
-const acceptBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' };
-const rejectBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' };
-
-const aiTriggerBtnStyle: CSSProperties = { padding: '8px 16px', backgroundColor: '#ff8fa3', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s ease-in-out' };
-const aiResponseBoxStyle: CSSProperties = { marginTop: '20px', padding: '18px 20px', backgroundColor: 'white', borderRadius: '18px', border: '1px solid #ffeef2', color: '#4d444a', fontStyle: 'italic', fontSize: '14px', boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.01)', width: '100%', boxSizing: 'border-box' };
+const emptyStateStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8a7d84', fontStyle: 'italic' };
+const bannerDoctorStyle: CSSProperties = { backgroundColor: 'white', border: '1px solid #ff8fa3', padding: '15px 25px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(255,143,163,0.08)' };
+const acceptBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: '#a7c9b0', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 800, cursor: 'pointer' };
+const rejectBtnStyle: CSSProperties = { padding: '8px 18px', backgroundColor: 'white', color: '#8a7d84', border: '1px solid #ffeef2', borderRadius: '10px', fontWeight: 700, cursor: 'pointer' };
+const aiTriggerBtnStyle: CSSProperties = { padding: '8px 16px', backgroundColor: '#ff8fa3', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer' };
+const aiResponseBoxStyle: CSSProperties = {
+  marginTop: '20px',
+  padding: '18px 20px',
+  background: 'linear-gradient(135deg, #fff 0%, #fff7f9 100%)',
+  borderRadius: '18px',
+  border: '1px solid #ffeef2',
+  boxShadow: '0 10px 25px rgba(255, 143, 163, 0.08)'
+};
+const badgeChip: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 10px',
+  borderRadius: '999px',
+  fontSize: '12px',
+  fontWeight: 800,
+  border: '1px solid transparent'
+};
+const tabelSectiuneStyle: CSSProperties = { marginTop: '15px', display: 'flex', flexDirection: 'column' };
+const tabelFiltreHeaderStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '15px' };
+const selectStyle: CSSProperties = { padding: '8px 12px', borderRadius: '10px', border: '1px solid #ffeef2', backgroundColor: 'white', fontWeight: 'bold', outline: 'none' };
+const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', textAlign: 'left', borderRadius: '15px', overflow: 'hidden' };
+const thStyle: CSSProperties = { padding: '12px 16px', fontSize: '14px', fontWeight: 800 };
+const tdStyle: CSSProperties = { padding: '12px 16px', fontSize: '14px', color: '#4d444a', borderBottom: '1px solid #ffeef2' };
+const trStyle: CSSProperties = { backgroundColor: '#fffafb' };
+const paginareContainerStyle: CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '20px' };
+const paginareNavBtnStyle: CSSProperties = { padding: '6px 12px', border: '1px solid #ffeef2', borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', fontSize: '13px', color: '#8a7d84' };
+const paginareNumarBtnStyle: CSSProperties = { width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 </file>
 
 <file path="client/src/pages/shared/ContactPage.tsx">
@@ -8802,90 +10413,198 @@ export default ForgotPassword;
 </file>
 
 <file path="client/src/pages/shared/Home.tsx">
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SakuraLayout from '../../layouts/SakuraLayout'; 
+import type { CSSProperties } from 'react';
 
 const Home = () => {
   const navigate = useNavigate();
 
+  // Stări pentru efectele de hover pe butoane
+  const [hoverBtn1, setHoverBtn1] = useState(false);
+  const [hoverBtn2, setHoverBtn2] = useState(false);
+
   return (
     <SakuraLayout>
       {/* HERO SECTION */}
-      <main style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', boxSizing: 'border-box' }}>
-        <div style={{ maxWidth: '850px', textAlign: 'center', marginBottom: '80px' }}>
-          <div style={{ 
-            display: 'inline-block', padding: '8px 25px', backgroundColor: 'white', color: '#ff8fa3', 
-            borderRadius: '30px', fontSize: '14px', fontWeight: 800, marginBottom: '25px', 
-            border: '1px solid #ffeef2', boxShadow: '0 10px 30px rgba(255,183,197,0.15)' 
-          }}>
-            ✨ E TIMPUL SĂ ÎNFLOREȘTI DIN NOU
+      <main style={mainHeroContainer}>
+        <div style={{ maxWidth: '850px', textAlign: 'center', marginBottom: '70px' }}>
+          
+          {/* BADGE PRINCIPAL - Tehnic și profesional */}
+          <div style={topBadgeStyle}>
+            💻 PLATFORMĂ DIGITALĂ PENTRU KINETOTERAPIE
           </div>
-          <h1 style={{ fontSize: 'clamp(40px, 8vw, 72px)', fontWeight: 950, color: '#4d444a', lineHeight: 1, margin: '0 0 35px 0', letterSpacing: '-3px' }}>
-            Renaște prin <br /> 
-            <span style={{ background: 'linear-gradient(to right, #ffb7c5, #a7c9b0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Mișcare</span>
+          
+          {/* TITLU - Schimbat din metafore în scopul real al aplicației */}
+          <h1 style={mainTitleStyle}>
+            Renaște prin <span style={gradientTextStyle}>Mișcare</span>
           </h1>
-          <p style={{ fontSize: '21px', color: '#8a7d84', maxWidth: '650px', margin: '0 auto 50px auto', lineHeight: 1.7, fontWeight: 500 }}>
-            O experiență caldă, creată pentru a-ți reda controlul într-un ritm blând, inspirat de perfecțiunea naturii.
+          
+          {/* SUBTITLU - Clar, medical, fără formulări pompoase de tip AI */}
+          <p style={mainSubtitleStyle}>
+            Sistem interactiv de reabilitare a membrelor superioare. Exerciții asistate și monitorizare clinică direct de la domiciliu.
           </p>
 
-          {/* BUTOANE DE ACȚIUNE - REPARATE AICI */}
+          {/* BUTOANE DE ACȚIUNE CU HOVER DINAMIC */}
           <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button 
               onClick={() => navigate('/signup')} 
+              onMouseEnter={() => setHoverBtn1(true)}
+              onMouseLeave={() => setHoverBtn1(false)}
               style={{ 
-                padding: '20px 50px', 
-                background: 'linear-gradient(135deg, #ffb7c5, #ff8fa3)', 
-                color: 'white', border: 'none', borderRadius: '22px', 
-                fontSize: '19px', fontWeight: 900, cursor: 'pointer', 
-                boxShadow: '0 15px 35px rgba(255, 183, 197, 0.4)', 
-                transition: '0.3s' 
+                ...primaryBtnStyle,
+                transform: hoverBtn1 ? 'translateY(-3px)' : 'none',
+                boxShadow: hoverBtn1 ? '0 15px 30px rgba(255, 143, 163, 0.4)' : '0 10px 25px rgba(255, 183, 197, 0.25)'
               }}
             >
-              Începe Călătoria
+              Creează cont 
             </button>
 
             <button 
               onClick={() => navigate('/explore')} 
+              onMouseEnter={() => setHoverBtn2(true)}
+              onMouseLeave={() => setHoverBtn2(false)}
               style={{ 
-                padding: '20px 50px', 
-                background: 'white', 
-                color: '#ff8fa3', 
-                border: '2px solid #ffb7c5', 
-                borderRadius: '22px', 
-                fontSize: '19px', fontWeight: 800, cursor: 'pointer', 
-                transition: '0.3s' 
+                ...secondaryBtnStyle,
+                backgroundColor: hoverBtn2 ? '#ff8fa3' : 'white',
+                color: hoverBtn2 ? 'white' : '#ff8fa3',
+                transform: hoverBtn2 ? 'translateY(-3px)' : 'none',
+                boxShadow: hoverBtn2 ? '0 15px 30px rgba(255, 143, 163, 0.2)' : 'none'
               }}
             >
-              Vezi Demo Interactiv
+              Explorează programele
             </button>
           </div>
         </div>
 
-        {/* INFO CARDS */}
-        <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: '1100px' }}>
-          <CompactInfo icon="🌿" title="Liniște" color="#f0f9f1" />
-          <CompactInfo icon="🌸" title="Progres" color="#fff1f5" />
-          <CompactInfo icon="☀️" title="Claritate" color="#fff9ed" />
+        {/* INFO CARDS - Schimbate cu pilonii tehnici/clinici ai licenței tale */}
+        <div style={infoCardsGrid}>
+          <CompactInfo icon="🩺" title="Monitorizare Clinică" desc="Date transmise direct medicului" color="#f0f9f1" />
+          <CompactInfo icon="📷" title="Asistență Video" desc="Procesare locală prin camera web" color="#fff1f5" />
+          <CompactInfo icon="📊" title="Grafice Evolutive" desc="Calcul statistic al progresului" color="#fff9ed" />
         </div>
       </main>
-
-    
     </SakuraLayout>
   );
 };
 
-function CompactInfo({ icon, title, color }: { icon: string, title: string, color: string }) {
+// --- COMPONENTA PENTRU CARDURILE INFORMATIVE (ÎMBUNĂTĂȚITĂ CĂRĂ CARACTERISTICI) ---
+interface CompactInfoProps {
+  icon: string;
+  title: string;
+  desc: string;
+  color: string;
+}
+
+function CompactInfo({ icon, title, desc, color }: CompactInfoProps) {
   return (
     <div style={{ 
-      backgroundColor: 'rgba(255, 255, 255, 0.7)', padding: '20px 40px', borderRadius: '35px', 
-      textAlign: 'center', border: `1px solid ${color}`, backdropFilter: 'blur(5px)',
-      boxShadow: '0 10px 30px rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', gap: '20px' 
+      backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+      padding: '25px 35px', 
+      borderRadius: '30px', 
+      border: `1px solid ${color}`, 
+      boxShadow: '0 10px 30px rgba(255, 183, 197, 0.05)', 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '20px',
+      flex: '1',
+      minWidth: '280px',
+      textAlign: 'left'
     }}>
-      <span style={{ fontSize: '36px' }}>{icon}</span>
-      <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#4d444a', margin: 0 }}>{title}</h3>
+      <span style={{ fontSize: '38px' }}>{icon}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#4d444a', margin: 0 }}>{title}</h3>
+        <p style={{ fontSize: '13px', color: '#8a7d84', margin: 0, lineHeight: 1.4 }}>{desc}</p>
+      </div>
     </div>
   );
 }
+
+// --- CONTEXT STILURI CURATE ---
+
+const mainHeroContainer: CSSProperties = {
+  width: '100%', 
+  flex: 1, 
+  display: 'flex', 
+  flexDirection: 'column', 
+  alignItems: 'center', 
+  justifyContent: 'center', 
+  padding: '40px 20px', 
+  boxSizing: 'border-box'
+};
+
+const topBadgeStyle: CSSProperties = { 
+  display: 'inline-block', 
+  padding: '8px 22px', 
+  backgroundColor: 'white', 
+  color: '#ff8fa3', 
+  borderRadius: '30px', 
+  fontSize: '13px', 
+  fontWeight: 800, 
+  marginBottom: '30px', 
+  border: '1px solid #ffeef2', 
+  boxShadow: '0 8px 20px rgba(255,183,197,0.12)',
+  letterSpacing: '0.05em'
+};
+
+const mainTitleStyle: CSSProperties = { 
+  fontSize: 'clamp(36px, 7vw, 64px)', 
+  fontWeight: 900, 
+  color: '#4d444a', 
+  lineHeight: 1.1, 
+  margin: '0 0 30px 0', 
+  letterSpacing: '-2px' 
+};
+
+const gradientTextStyle: CSSProperties = { 
+  background: 'linear-gradient(to right, #ffb7c5, #a7c9b0)', 
+  WebkitBackgroundClip: 'text', 
+  WebkitTextFillColor: 'transparent' 
+};
+
+const mainSubtitleStyle: CSSProperties = { 
+  fontSize: '19px', 
+  color: '#8a7d84', 
+  maxWidth: '700px', 
+  margin: '0 auto 45px auto', 
+  lineHeight: 1.6, 
+  fontWeight: 500 
+};
+
+const primaryBtnStyle: CSSProperties = { 
+  padding: '18px 45px', 
+  background: 'linear-gradient(135deg, #ffb7c5, #ff8fa3)', 
+  color: 'white', 
+  border: 'none', 
+  borderRadius: '20px', 
+  fontSize: '17px', 
+  fontWeight: 800, 
+  cursor: 'pointer', 
+  transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease' 
+};
+
+const secondaryBtnStyle: CSSProperties = { 
+  padding: '18px 45px', 
+  backgroundColor: 'white', 
+  color: '#ff8fa3', 
+  border: '2px solid #ffb7c5', 
+  borderRadius: '20px', 
+  fontSize: '17px', 
+  fontWeight: 800, 
+  cursor: 'pointer', 
+  transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' 
+};
+
+const infoCardsGrid: CSSProperties = { 
+  display: 'flex', 
+  gap: '25px', 
+  flexWrap: 'wrap', 
+  justifyContent: 'center', 
+  width: '100%', 
+  maxWidth: '1100px',
+  marginTop: '20px'
+};
 
 export default Home;
 </file>
@@ -9952,7 +11671,394 @@ PORT=5000
 SUPABASE_URL=https://nxqtbtqfplfcvdhimxat.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54cXRidHFmcGxmY3ZkaGlteGF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODk1MjEsImV4cCI6MjA4NjY2NTUyMX0.VkcAqhytOw0WZ_Txr7aIU2jJoYDaWQXr_sRP_T_llg4
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_MIaBQSxejaB2mYSBqc7XlQ_0kVjqyMj
-GEMINI_API_KEY=AIzaSyBh1MWvKdRinMiXggeMMRvDJ2Vog1w4-qU
+GEMINI_MODEL=gemini-1.5-flash-latest
+GEMINI_API_KEY=AIzaSyAmloPx-cgBnBas-s3zBcE76ILGpDS8Duk
+</file>
+
+<file path="server/dist/config/supabase.js">
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("EROARE: Lipsesc configurările Supabase în fișierul .env!");
+}
+// Creăm clientul cu cheia de Admin (Service Role)
+// Aceasta va fi folosită doar pe server!
+export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+</file>
+
+<file path="server/dist/controllers/aiController.js">
+import { supabase } from '../config/supabase.js';
+export const genereazaRezumatMedical = async (req, res) => {
+    const { id_pacient } = req.body;
+    try {
+        // 2. Extragem datele din tabelul tău din Supabase
+        const { data, error } = await supabase
+            .from('progres_pacienti')
+            .select('scor, tip_exercitiu, data_finalizare')
+            .eq('id_pacient', id_pacient)
+            .order('data_finalizare', { ascending: false })
+            .limit(10);
+        if (error)
+            throw error;
+        if (!data || data.length === 0) {
+            return res.json({ success: true, rezumat: "Nu există suficiente date înregistrate pentru a genera o analiză medicală." });
+        }
+        // 3. Formatăm istoricul sesiunilor sub formă de text
+        const dateEvolutie = data.map((s) => `Exercițiu: ${s.tip_exercitiu}, Scor: ${s.scor}%, Data: ${s.data_finalizare}`).join('; ');
+        // REPARAT CRITIC: Am pus identificatorul exact universal primit de v1beta în API direct
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        const prompt = `Ești un asistent virtual specializat în kinetoterapie și reabilitare motorie neuro-musculară. 
+Analizează următoarele date de progres ale pacientului pentru proiectul meu de licență: ${dateEvolutie}. 
+Generează un rezumat clinic scurt (maxim 3 propoziții) în limba română pentru medicul coordonator. 
+Specifică în mod explicit dacă se observă o EVOLUȚIE clinică sau o INVOLUȚIE/STAGNARE a stării motorii și adaugă o scurtă recomandare terapeutică bazată pe performanță. 
+Păstrează un ton academic, strict profesional, fără emoji-uri și fără introduceri introductive.`;
+        const geminiResponse = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+        const aiData = await geminiResponse.json();
+        // Verificăm dacă răspunsul Google a întors o eroare structurală
+        if (!geminiResponse.ok) {
+            console.error("=== EROARE DE PARSARE SERVER GOOGLE ===");
+            console.error(aiData);
+            return res.status(geminiResponse.status).json({
+                success: false,
+                error: aiData.error?.message || "Eroare la procesarea răspunsului de la Google."
+            });
+        }
+        const rezumat = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "Analiza AI nu a putut fi generată momentan.";
+        return res.json({ success: true, rezumat });
+    }
+    catch (error) {
+        console.error("[AI ERROR IN CONTROLLER]:", error.message || error);
+        return res.status(500).json({ success: false, error: "Eroare la generarea rezumatului medical pe server." });
+    }
+};
+</file>
+
+<file path="server/dist/controllers/chatController.js">
+import { supabase } from '../config/supabase.js';
+export const proceseazaMesaj = async (req, res) => {
+    const { patient_id, nume_pacient, mesaj, client_id, role } = req.body;
+    try {
+        // 1. Detecție problemă tehnică pentru alertă Admin
+        const cuvinteTehnice = ['nu merge', 'eroare', 'bug', 'parola', 'cont', 'login', 'tehnic'];
+        const esteProblemaTehnica = cuvinteTehnice.some(cuvant => mesaj.toLowerCase().includes(cuvant));
+        // 2. Apel Gemini AI
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        const promptAI = role === 'doctor'
+            ? `Ești Sakura, asistent AI. Analizează tehnic cererea doctorului: ${mesaj}`
+            : `Ești Sakura, asistent kineto empatic. Răspunde scurt în română (max 2 propoziții): ${mesaj}`;
+        const geminiResponse = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: promptAI }] }] })
+        });
+        const data = await geminiResponse.json();
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sunt aici să te ajut!";
+        // 3. SALVARE UNICĂ (Mesaj + Răspuns AI + Flag Admin + ClientID)
+        const { data: savedData, error } = await supabase
+            .from('contact_messages')
+            .insert([{
+                patient_id,
+                nume_pacient: nume_pacient || 'Utilizator',
+                mesaj: mesaj,
+                raspuns_admin: `🌸 ${aiText.trim()}`,
+                client_id: client_id, // Ștampila de la Frontend
+                necesita_interventie_admin: esteProblemaTehnica,
+                citit: false,
+                created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+        if (error)
+            throw error;
+        res.json({ success: true, message: savedData });
+    }
+    catch (error) {
+        console.error("[CHAT ERROR]:", error.message);
+        res.status(500).json({ success: false, error: "Eroare la procesarea mesajului" });
+    }
+};
+</file>
+
+<file path="server/dist/controllers/exerciseController.js">
+import { supabase } from '../config/supabase.js';
+// =========================================================================
+// FUNCȚIA 1: Procesare și Salvare Sesiune Nouă (Cea apelată după exercițiu)
+// =========================================================================
+export const proceseazaExercitiu = async (req, res) => {
+    const { id_pacient, tip_exercitiu, scor, durata_secunde } = req.body;
+    try {
+        if (scor !== undefined && scor !== null) {
+            console.log("🌸 [BACKEND] Salvare sesiune nouă pentru pacientul:", id_pacient);
+            const { error } = await supabase
+                .from('progres_pacienti')
+                .insert([{
+                    id_pacient: id_pacient,
+                    tip_exercitiu: tip_exercitiu || "Coordonare Forme",
+                    scor: Number(scor),
+                    durata_secunde: Number(durata_secunde) || 0,
+                    data_finalizare: new Date().toISOString()
+                }]);
+            if (error)
+                throw error;
+            return res.json({ success: true, message: "Sesiune salvată cu succes!" });
+        }
+        return res.json({ success: true, message: "Date recepționate (live streaming)" });
+    }
+    catch (error) {
+        console.error("❌ Eroare la salvarea exercițiului:", error.message);
+        res.status(500).json({ error: "Eroare internă la salvarea datelor." });
+    }
+};
+// =========================================================================
+// FUNCȚIA 2: Preluare Istoric General (Cea pe care o căuta ruta și dădea eroare)
+// =========================================================================
+export const getIstoricPacient = async (req, res) => {
+    const { id_pacient } = req.params;
+    try {
+        console.log("🌸 [BACKEND] Preluare istoric pentru pacientul:", id_pacient);
+        const { data, error } = await supabase
+            .from('progres_pacienti')
+            .select('*')
+            .eq('id_pacient', id_pacient)
+            .order('data_finalizare', { ascending: true });
+        if (error)
+            throw error;
+        res.json(data);
+    }
+    catch (error) {
+        console.error("❌ Eroare la returnarea istoricului:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+};
+// =========================================================================
+// FUNCȚIA 3: Evaluare AI Indestructibilă (Separare Pacient / Medic)
+// =========================================================================
+export const genereazaRezumatMedical = async (req, res) => {
+    let idCautat = req.body.id_pacient || req.body.pacientId || req.body.id;
+    const { pacientNume } = req.body;
+    // SEPARARE INFALIBILĂ: Dacă frontend-ul trimite parametrul 'pacientNume', înseamnă 100% că apelul vine de la ProgressPage (Pacient)
+    const esteMedic = pacientNume ? false : true;
+    console.log(`\n========== SakuraMotion AI LOG ==========`);
+    console.log(`👤 Nume pacient primit în body: ${pacientNume || 'Nespecificat (Apel din panou medic)'}`);
+    console.log(`🌸 [CONTEXT DETECTAT]: ${esteMedic ? 'MEDIC 👨‍⚕️' : 'PACIENT 👤'}`);
+    console.log(`=========================================\n`);
+    try {
+        if (!idCautat) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user)
+                idCautat = user.id;
+        }
+        if (!idCautat) {
+            return res.status(400).json({ success: false, error: "Nu s-a putut mapa un ID de pacient valid." });
+        }
+        // Extragem istoricul complet din tabelă
+        const { data: sesiuni, error } = await supabase
+            .from('progres_pacienti')
+            .select('scor, tip_exercitiu, data_finalizare')
+            .eq('id_pacient', idCautat)
+            .order('data_finalizare', { ascending: true });
+        if (error)
+            throw error;
+        if (!sesiuni || sesiuni.length === 0) {
+            return res.json({
+                success: true,
+                rezumat: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză.",
+                analysis: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză."
+            });
+        }
+        const normalizeExerciseName = (value) => value
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .toLowerCase()
+            .trim();
+        const sesiuniOrdinate = [...sesiuni].sort((a, b) => new Date(a.data_finalizare).getTime() - new Date(b.data_finalizare).getTime());
+        const gruparePeExercitii = sesiuniOrdinate.reduce((acc, sesiune) => {
+            const cheie = normalizeExerciseName(sesiune.tip_exercitiu || 'Exercițiu');
+            if (!acc[cheie]) {
+                acc[cheie] = { nume: sesiune.tip_exercitiu || 'Exercițiu', intrari: [] };
+            }
+            acc[cheie].intrari.push(sesiune);
+            return acc;
+        }, {});
+        const dateEvolutie = Object.values(gruparePeExercitii)
+            .map((grup) => {
+            const secventa = grup.intrari
+                .map((item) => `[${new Date(item.data_finalizare).toLocaleString('ro-RO')}]: ${item.scor}%`)
+                .join(' ➔ ');
+            return `EXERCIȚIU: ${grup.nume}\nCronologie scoruri: ${secventa}`;
+        })
+            .join('\n\n');
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        // 2. Prompt antiglonț cu reguli matematice stricte
+        const prompt = `Ești un analist de date medicale. Sarcina ta este să identifici perioadele de progres și regres din istoricul pacientului. 
+Pentru a evita erorile logice, trebuie să respecți EXACT aceste 3 reguli matematice universale:
+- REGULA 1 (PROGRES): Scorul CREȘTE (de ex: de la 50% la 100%).
+- REGULA 2 (REGRES): Scorul SCADE (de ex: de la 100% la 0% sau de la 80% la 50%).
+- REGULA 3 (STABILIZARE/PLATOU): Scorul RĂMÂNE IDENTIC (de ex: de la 100% la 100%).
+
+Nu suprapune niciodată datele. O perioadă nu poate fi și progres și regres în același timp. Dacă scorul se menține la 100% pe mai multe zile, se numește exclusiv "STABILIZARE PERFECTĂ".
+
+Redactează răspunsul tău sub titlul "[PERIOADE DE PROGRES / REGRES PE EXERCIȚIU]".
+Pentru fiecare exercițiu, scrie o singură frază clară și logică, după modelul:
+"• [Nume Exercițiu]: Trend general de [Progres/Regres/Stabilizare], pornind de la X% și ajungând la Y%. Cea mai mare creștere a fost între [Data A] și [Data B], iar o scădere a apărut între [Data C] și [Data D]." (Omite scăderea dacă nu există).
+
+Datele pacientului:
+${dateEvolutie}`;
+        // AICI ESTE SINGURA MODIFICARE: Un prompt strict care îi interzice să genereze alte texte în afară de rezultat.
+        const geminiResponse = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const aiData = await geminiResponse.json();
+        if (!geminiResponse.ok) {
+            throw new Error(aiData.error?.message || 'Eroare AI la generarea raportului medical.');
+        }
+        const textFinal = aiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Raportul AI nu a putut fi generat momentan.';
+        return res.json({
+            success: true,
+            rezumat: textFinal,
+            analysis: textFinal
+        });
+    }
+    catch (error) {
+        console.error("❌ [CRITICAL AI ERROR]:", error.message || error);
+        return res.status(500).json({ success: false, error: "Eroare la procesarea modulului statistic AI." });
+    }
+};
+</file>
+
+<file path="server/dist/index.js">
+import dotenv from 'dotenv';
+dotenv.config(); // <-- OBLIGATORIU PE LINIA 2, înainte de orice import de rută!
+import express from 'express';
+import cors from 'cors';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import exerciseRoutes from './routes/exerciseRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+dotenv.config();
+const app = express();
+const PORT = process.env.PORT || 5000;
+// Verificare cheie API în consolă la pornire (fără să o afișăm pe toată din motive de securitate)
+if (!process.env.GEMINI_API_KEY) {
+    console.warn("⚠️ ATENȚIE: GEMINI_API_KEY nu este setată în fișierul .env!");
+}
+// Configurare Swagger
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'API SakuraMotion',
+            version: '1.0.0',
+            description: 'Documentația endpoint-urilor pentru platforma de reabilitare',
+        },
+        servers: [{ url: `http://localhost:${PORT}` }],
+    },
+    apis: [],
+};
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+// Middleware
+app.use(cors({
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
+app.use(express.json({ limit: '50mb' }));
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+// Rute API
+app.use('/api/exercises', exerciseRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/admin', adminRoutes);
+app.get('/', (req, res) => {
+    res.send('Backend SakuraMotion Activ. Mergi la /api-docs pentru testare.');
+});
+app.listen(PORT, () => {
+    console.log(`🚀 Serverul rulează pe: http://localhost:${PORT}`);
+    console.log(`📝 Documentația Swagger: http://localhost:${PORT}/api-docs`);
+});
+</file>
+
+<file path="server/dist/lib/calcul-miscare.js">
+export const calculeazaUnghi = (A, B, C) => {
+    const radians = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
+    let angle = Math.abs((radians * 180.0) / Math.PI);
+    if (angle > 180.0)
+        angle = 360 - angle;
+    return angle;
+};
+</file>
+
+<file path="server/dist/routes/adminRoutes.js">
+// server/src/routes/adminRoutes.ts
+import { Router } from 'express';
+const router = Router();
+router.get('/test', (req, res) => {
+    res.json({ message: "Admin routes work!" });
+});
+export default router;
+</file>
+
+<file path="server/dist/routes/chatRoutes.js">
+import { Router } from 'express';
+import { proceseazaMesaj } from '../controllers/chatController.js';
+import { genereazaRezumatMedical } from '../controllers/aiController.js';
+const router = Router();
+/**
+ * @swagger
+ * /api/chat/send:
+ *   post:
+ *     summary: Trimite un mesaj către asistentul Sakura AI
+ *     tags: [Chat AI]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               patient_id:
+ *                 type: string
+ *                 example: "123e4567-e89b-12d3-a456-426614174000"
+ *               nume_pacient:
+ *                 type: string
+ *                 example: "Test User"
+ *               mesaj:
+ *                 type: string
+ *                 example: "Mă doare umărul drept când ridic mâna."
+ *     responses:
+ *       200:
+ *         description: Mesaj salvat și răspuns AI primit
+ *       500:
+ *         description: Eroare la procesare
+ */
+router.post('/send', proceseazaMesaj);
+router.post('/rezumat-medical', genereazaRezumatMedical);
+export default router;
+</file>
+
+<file path="server/dist/routes/exerciseRoutes.js">
+import { Router } from 'express';
+import { proceseazaExercitiu, getIstoricPacient, genereazaRezumatMedical } from '../controllers/exerciseController.js';
+const router = Router();
+// 1. Rutele tale standard pentru salvare și istoric grafic
+router.post('/proceseaza', proceseazaExercitiu);
+router.get('/istoric/:id_pacient', getIstoricPacient);
+// 2. RUTA CRITICĂ UNIFICATĂ PENTRU ANALIZA AI
+// Mapăm direct /analiza-ai către funcția din controller pe care am scris-o completă
+router.post('/analiza-ai', genereazaRezumatMedical);
+export default router;
 </file>
 
 <file path="server/package.json">
@@ -9975,6 +12081,7 @@ GEMINI_API_KEY=AIzaSyBh1MWvKdRinMiXggeMMRvDJ2Vog1w4-qU
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.19.2",
+    "openai": "^6.42.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
@@ -10208,6 +12315,44 @@ export const calculeazaUnghi = (A: any, B: any, C: any): number => {
 </files>
 </file>
 
+<file path="server/scripts/kill-port-5000.js">
+import { execSync } from 'node:child_process';
+
+const killPort5000 = () => {
+  try {
+    const output = execSync(
+      'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique"',
+      { encoding: 'utf8' }
+    );
+
+    const pids = output
+      .split(/\r?\n/)
+      .map((line) => Number(line.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    const uniquePids = [...new Set(pids)];
+
+    if (uniquePids.length === 0) {
+      console.log('[startup] Nu există procese Node pe portul 5000.');
+      return;
+    }
+
+    for (const pid of uniquePids) {
+      try {
+        execSync(`taskkill /F /PID ${pid}`, { stdio: 'inherit' });
+        console.log(`[startup] Procesul ${pid} de pe portul 5000 a fost închis.`);
+      } catch (error) {
+        console.warn(`[startup] Nu s-a putut închide PID ${pid}:`, error);
+      }
+    }
+  } catch (error) {
+    console.warn('[startup] Nu s-a putut verifica portul 5000:', error);
+  }
+};
+
+killPort5000();
+</file>
+
 <file path="server/src/config/supabase.ts">
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -10241,7 +12386,7 @@ export const genereazaRezumatMedical = async (req: Request, res: Response) => {
   const { id_pacient } = req.body;
 
   try {
-    // 2. Extragem datele și folosim tipizarea pentru 'data'
+    // 2. Extragem datele din tabelul tău din Supabase
     const { data, error } = await supabase
       .from('progres_pacienti')
       .select('scor, tip_exercitiu, data_finalizare')
@@ -10252,21 +12397,22 @@ export const genereazaRezumatMedical = async (req: Request, res: Response) => {
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.json({ success: true, rezumat: "Nu există suficiente date pentru o analiză medicală." });
+      return res.json({ success: true, rezumat: "Nu există suficiente date înregistrate pentru a genera o analiză medicală." });
     }
 
-    // 3. Specificăm tipul parametrului 's' ca fiind 'ProgresRow'
-    // Aceasta elimină eroarea "implicitly has an any type"
+    // 3. Formatăm istoricul sesiunilor sub formă de text
     const dateEvolutie = data.map((s: ProgresRow) => 
       `Exercițiu: ${s.tip_exercitiu}, Scor: ${s.scor}%, Data: ${s.data_finalizare}`
     ).join('; ');
 
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    // REPARAT CRITIC: Am pus identificatorul exact universal primit de v1beta în API direct
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
-    const prompt = `Ești un asistent virtual specializat în kinetoterapie. Analizează următoarele date de progres ale pacientului: ${dateEvolutie}. 
-    Generează un rezumat clinic scurt (maxim 3-4 propoziții) pentru medicul coordonator. 
-    Specifică trendul (evoluție/involuție), media scorurilor și o recomandare tehnică. 
-    Folosește un ton academic, profesional, în limba română. Fără emoji-uri.`;
+    const prompt = `Ești un asistent virtual specializat în kinetoterapie și reabilitare motorie neuro-musculară. 
+Analizează următoarele date de progres ale pacientului pentru proiectul meu de licență: ${dateEvolutie}. 
+Generează un rezumat clinic scurt (maxim 3 propoziții) în limba română pentru medicul coordonator. 
+Specifică în mod explicit dacă se observă o EVOLUȚIE clinică sau o INVOLUȚIE/STAGNARE a stării motorii și adaugă o scurtă recomandare terapeutică bazată pe performanță. 
+Păstrează un ton academic, strict profesional, fără emoji-uri și fără introduceri introductive.`;
 
     const geminiResponse = await fetch(GEMINI_URL, {
       method: 'POST',
@@ -10277,13 +12423,24 @@ export const genereazaRezumatMedical = async (req: Request, res: Response) => {
     });
 
     const aiData = await geminiResponse.json();
+
+    // Verificăm dacă răspunsul Google a întors o eroare structurală
+    if (!geminiResponse.ok) {
+      console.error("=== EROARE DE PARSARE SERVER GOOGLE ===");
+      console.error(aiData);
+      return res.status(geminiResponse.status).json({
+        success: false,
+        error: aiData.error?.message || "Eroare la procesarea răspunsului de la Google."
+      });
+    }
+
     const rezumat = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "Analiza AI nu a putut fi generată momentan.";
 
-    res.json({ success: true, rezumat });
+    return res.json({ success: true, rezumat });
 
   } catch (error: any) {
-    console.error("[AI ERROR]:", error.message);
-    res.status(500).json({ success: false, error: "Eroare la generarea rezumatului medical." });
+    console.error("[AI ERROR IN CONTROLLER]:", error.message || error);
+    return res.status(500).json({ success: false, error: "Eroare la generarea rezumatului medical pe server." });
   }
 };
 </file>
@@ -10347,69 +12504,202 @@ export const proceseazaMesaj = async (req: Request, res: Response) => {
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 
-// Funcția 1: Procesare și Salvare (Cea apelată de ExercisePage)
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').replace(/^models\//, '');
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// =========================================================================
+// FUNCȚIA 1: Procesare și Salvare Sesiune Nouă (Cea apelată după exercițiu)
+// =========================================================================
 export const proceseazaExercitiu = async (req: Request, res: Response) => {
   const { id_pacient, tip_exercitiu, scor, durata_secunde } = req.body;
-
   try {
     if (scor !== undefined && scor !== null) {
-      console.log("Salvare sesiune pentru pacientul:", id_pacient);
-
-      const { data, error } = await supabase
+      console.log("🌸 [BACKEND] Salvare sesiune nouă pentru pacientul:", id_pacient);
+      const { error } = await supabase
         .from('progres_pacienti')
         .insert([{ 
             id_pacient: id_pacient, 
             tip_exercitiu: tip_exercitiu || "Coordonare Forme", 
-            scor: scor,
-            durata_secunde: durata_secunde || 0,
+            scor: Number(scor),
+            durata_secunde: Number(durata_secunde) || 0,
             data_finalizare: new Date().toISOString()
         }]);
 
-      if (error) {
-        console.error("Eroare Supabase la insert:", error.message);
-        return res.status(400).json({ success: false, error: error.message });
-      }
-
+      if (error) throw error;
       return res.json({ success: true, message: "Sesiune salvată cu succes!" });
     }
-
-    return res.json({ success: true, message: "Date primite (live)" });
-
+    return res.json({ success: true, message: "Date recepționate (live streaming)" });
   } catch (error: any) {
-    console.error("Eroare Server Backend:", error.message);
-    res.status(500).json({ error: "Eroare internă server" });
+    console.error("❌ Eroare la salvarea exercițiului:", error.message);
+    res.status(500).json({ error: "Eroare internă la salvarea datelor." });
   }
 };
 
-// Funcția 2: Preluare Istoric (Cea care lipsea și cauza eroarea la pornire)
+// =========================================================================
+// FUNCȚIA 2: Preluare Istoric General (Cea pe care o căuta ruta și dădea eroare)
+// =========================================================================
 export const getIstoricPacient = async (req: Request, res: Response) => {
     const { id_pacient } = req.params;
     try {
+        console.log("🌸 [BACKEND] Preluare istoric pentru pacientul:", id_pacient);
         const { data, error } = await supabase
             .from('progres_pacienti')
             .select('*')
             .eq('id_pacient', id_pacient)
-            .order('data_finalizare', { ascending: false });
+            .order('data_finalizare', { ascending: true });
 
         if (error) throw error;
         res.json(data);
     } catch (error: any) {
-        console.error("Eroare la preluare istoric:", error.message);
+        console.error("❌ Eroare la returnarea istoricului:", error.message);
         res.status(500).json({ error: error.message });
     }
+};
+
+// =========================================================================
+// FUNCȚIA 3: Evaluare AI Indestructibilă (Separare Pacient / Medic)
+// =========================================================================
+export const genereazaRezumatMedical = async (req: Request, res: Response) => {
+  let idCautat = req.body.id_pacient || req.body.pacientId || req.body.id;
+  const { pacientNume } = req.body;
+  
+  // SEPARARE INFALIBILĂ: Dacă frontend-ul trimite parametrul 'pacientNume', înseamnă 100% că apelul vine de la ProgressPage (Pacient)
+  const esteMedic = pacientNume ? false : true;
+
+  console.log(`\n========== SakuraMotion AI LOG ==========`);
+  console.log(`👤 Nume pacient primit în body: ${pacientNume || 'Nespecificat (Apel din panou medic)'}`);
+  console.log(`🌸 [CONTEXT DETECTAT]: ${esteMedic ? 'MEDIC 👨‍⚕️' : 'PACIENT 👤'}`);
+  console.log(`=========================================\n`);
+
+  try {
+    if (!idCautat) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) idCautat = user.id;
+    }
+
+    if (!idCautat) {
+      return res.status(400).json({ success: false, error: "Nu s-a putut mapa un ID de pacient valid." });
+    }
+
+    // Extragem istoricul complet din tabelă
+    const { data: sesiuni, error } = await supabase
+      .from('progres_pacienti')
+      .select('scor, tip_exercitiu, data_finalizare')
+      .eq('id_pacient', idCautat)
+      .order('data_finalizare', { ascending: true });
+
+    if (error) throw error;
+
+    if (!sesiuni || sesiuni.length === 0) {
+      return res.json({ 
+        success: true, 
+        rezumat: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză.",
+        analysis: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză."
+      });
+    }
+
+    const normalizeExerciseName = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase()
+        .trim();
+
+    const sesiuniOrdinate = [...sesiuni].sort((a, b) => new Date(a.data_finalizare).getTime() - new Date(b.data_finalizare).getTime());
+
+    const gruparePeExercitii = sesiuniOrdinate.reduce<Record<string, { nume: string; intrari: typeof sesiuniOrdinate }>>((acc, sesiune) => {
+      const cheie = normalizeExerciseName(sesiune.tip_exercitiu || 'Exercițiu');
+      if (!acc[cheie]) {
+        acc[cheie] = { nume: sesiune.tip_exercitiu || 'Exercițiu', intrari: [] };
+      }
+      acc[cheie].intrari.push(sesiune);
+      return acc;
+    }, {});
+
+    const dateEvolutie = Object.values(gruparePeExercitii)
+      .map((grup) => {
+        const secventa = grup.intrari
+          .map((item) => `[${new Date(item.data_finalizare).toLocaleString('ro-RO')}]: ${item.scor}%`)
+          .join(' ➔ ');
+
+        return `EXERCIȚIU: ${grup.nume}\nCronologie scoruri: ${secventa}`;
+      })
+      .join('\n\n');
+
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, error: 'Cheia GEMINI_API_KEY nu este configurată în .env.' });
+    }
+
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const prompt = `Ești un analist de date medicale. Sarcina ta este să identifici perioadele de progres și regres din istoricul pacientului.
+Respectă aceste reguli:
+- PROGRES = scorul crește între două momente;
+- REGRES = scorul scade între două momente;
+- STABILIZARE = scorul rămâne identic.
+
+Redactează răspunsul sub titlul "[PERIOADE DE PROGRES / REGRES PE EXERCIȚIU]".
+Pentru fiecare exercițiu, scrie o singură frază clară, în limba română, de tipul:
+"• [Nume Exercițiu]: Trend general de [Progres/Regres/Stabilizare], pornind de la X% și ajungând la Y%. Cea mai mare creștere a fost între [Data A] și [Data B], iar o scădere a apărut între [Data C] și [Data D]."
+Omite partea de scădere dacă nu există.
+
+Datele pacientului:
+${dateEvolutie}`;
+
+    const geminiResponse = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        generationConfig: {
+          temperature: 0.2,
+          topK: 20,
+          topP: 0.8,
+          maxOutputTokens: 260
+        },
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    const rawText = await geminiResponse.text();
+    let aiData: any = {};
+
+    try {
+      aiData = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      throw new Error(`Răspuns invalid de la Gemini API: ${rawText || 'corp gol'}`);
+    }
+
+    if (!geminiResponse.ok) {
+      throw new Error(aiData.error?.message || `Eroare Gemini API (${geminiResponse.status}): ${rawText || 'răspuns gol'}`);
+    }
+
+    const textFinal = aiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Raportul AI nu a putut fi generat momentan.';
+
+    return res.json({ 
+      success: true, 
+      rezumat: textFinal,
+      analysis: textFinal 
+    });
+
+  } catch (error: any) {
+    console.error("❌ [CRITICAL AI ERROR]:", error.message || error);
+    return res.status(500).json({ success: false, error: "Eroare la procesarea modulului statistic AI." });
+  }
 };
 </file>
 
 <file path="server/src/index.ts">
+import dotenv from 'dotenv';
+dotenv.config(); // <-- OBLIGATORIU PE LINIA 2, înainte de orice import de rută!
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 
 import exerciseRoutes from './routes/exerciseRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+
 
 dotenv.config();
 
@@ -10528,132 +12818,17 @@ export default router;
 
 <file path="server/src/routes/exerciseRoutes.ts">
 import { Router, Request, Response } from 'express';
-import { proceseazaExercitiu, getIstoricPacient } from '../controllers/exerciseController.js';
-import https from 'https';
+import { proceseazaExercitiu, getIstoricPacient, genereazaRezumatMedical } from '../controllers/exerciseController.js';
 
 const router = Router();
 
+// 1. Rutele tale standard pentru salvare și istoric grafic
 router.post('/proceseaza', proceseazaExercitiu);
 router.get('/istoric/:id_pacient', getIstoricPacient);
 
-router.post('/analiza-ai', async (req: Request, res: Response) => {
-  try {
-    const { pacientNume, istoric } = req.body;
-
-    if (!istoric || istoric.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Date insuficiente pentru analiza AI."
-      });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        message: "Cheia API Gemini nu este configurata in .env."
-      });
-    }
-
-    // Transformăm istoricul într-un text plat, foarte curat, ușor de digerat de inteligența artificială
-    const istoricText = istoric
-      .map((s: any) => `Data: ${s.data || 'N/A'}, Acuratete: ${s.scor_acuratete || 0}%`)
-      .join('\n');
-
-    const promptText = `
-Ești un expert clinician în kinetoterapie și reabilitare motorie neuro-musculară.
-Analizează evoluția istorică cronologică a pacientului ${pacientNume} pe baza următoarelor date din exerciții:
-${istoricText}
-
-Cerințe pentru evaluarea de licență:
-1. Urmărește trendul datelor și precizează în mod explicit dacă se observă o EVOLUȚIE clinică (progres) sau o INVOLUȚIE (regres/stagnare a funcției motorii).
-2. Oferă o scurtă recomandare terapeutică utilă pentru recuperarea pacientului.
-
-Restricții vizuale:
-- Răspunsul trebuie redactat exclusiv în limba română.
-- Rezumatul trebuie să fie foarte concis (maxim 3 rânduri text), adaptat să apară curat sub un grafic.
-- Păstrează un ton academic și extrem de profesionist.
-`;
-
-    // Împachetăm corpul cererii conform specificației oficiale Google
-    const postData = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: promptText
-            }
-          ]
-        }
-      ]
-    });
-
-    const options = {
-      hostname: 'generativelanguage.googleapis.com',
-      port: 443,
-      path: `/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    };
-
-    // Apelul asincron asigurat de modulul https
-    const apiCall = () => {
-      return new Promise<string>((resolve, reject) => {
-        const reqGoogle = https.request(options, (resGoogle) => {
-          let body = '';
-          resGoogle.on('data', (chunk) => body += chunk);
-          resGoogle.on('end', () => resolve(body));
-        });
-
-        reqGoogle.on('error', (err) => reject(err));
-        reqGoogle.write(postData);
-        reqGoogle.end();
-      });
-    };
-
-    const rawResult = await apiCall();
-    
-    // Începem parsarea defensivă pentru a prinde orice variație de răspuns JSON de la Google
-    let data: any;
-    try {
-      data = JSON.parse(rawResult);
-    } catch (e) {
-      console.error("Eroare la parsarea JSON-ului brut de la Google:", rawResult);
-      throw new Error("Răspunsul primit de la Google nu este un JSON valid.");
-    }
-
-    // Extragere pe straturi sigure a textului generat de AI
-    let responseText = "";
-    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      responseText = data.candidates[0].content.parts[0].text;
-    } else if (data.error?.message) {
-      // Dacă Google ne-a întors o eroare structurată (ex: cheie invalidă sau cotă depășită)
-      throw new Error(`Google API Message: ${data.error.message}`);
-    } else {
-      console.log("Structură ciudată primită de la Google:", JSON.stringify(data));
-      responseText = "Analiza s-a finalizat, dar structura textului nu a putut fi citită direct.";
-    }
-
-    return res.json({
-      success: true,
-      analysis: responseText
-    });
-
-  } catch (error: any) {
-    console.error("=== EROARE CRITICĂ GEMINI BACKEND ===");
-    console.error(error.message || error);
-    console.error("=====================================");
-
-    return res.status(500).json({
-      success: false,
-      message: "Eroare la generarea interpretării AI.",
-      details: error.message || "Verificați terminalul de server."
-    });
-  }
-});
+// 2. RUTA CRITICĂ UNIFICATĂ PENTRU ANALIZA AI
+// Mapăm direct /analiza-ai către funcția din controller pe care am scris-o completă
+router.post('/analiza-ai', genereazaRezumatMedical);
 
 export default router;
 </file>

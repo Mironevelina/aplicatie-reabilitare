@@ -60,6 +60,14 @@ const Header = () => {
 
   if (['/login', '/signup', '/forgot-password'].includes(location.pathname)) return null;
 
+  // Funcție ajutătoare pentru a naviga direct la panoul de control corect în funcție de rol
+  const handleDashboardNavigation = () => {
+    if (!profile) return;
+    if (profile.role === 'admin') navigate('/admin');
+    else if (profile.role === 'doctor') navigate('/doctor-dashboard');
+    else navigate('/dashboard');
+  };
+
   return (
     <header style={headerStyle}>
       <div style={logoSection} onClick={() => navigate('/')}>
@@ -68,22 +76,26 @@ const Header = () => {
       </div>
 
       <nav style={navStyle}>
-        <span style={linkStyle} onClick={() => navigate('/')}>Acasa</span>
+        <span style={linkStyle} onClick={() => navigate('/')}>Acasă</span>
+        <span style={linkStyle} onClick={() => navigate('/explore')}>Explorează</span>
         <span style={linkStyle} onClick={() => navigate('/contact')}>Contact</span>
 
         {!loading && (
           <>
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 
-                {/* AM ELIMINAT CLOPOȚELUL DE NOTIFICĂRI CHAT AICI */}
+                {/* Buton dinamic și inteligent de Panou Control bazat pe rol */}
+                <button style={panelBtn} onClick={handleDashboardNavigation}>
+                  {profile?.role === 'admin' ? 'Panou Admin' : 'Panou Control'}
+                </button>
 
-                {profile?.role === 'admin' ? (
-                  <button style={adminBtn} onClick={() => navigate('/admin')}>Panou Admin</button>
-                ) : (
+                {/* Avatarul rotund vizibil doar pentru Medici și Pacienți */}
+                {profile?.role !== 'admin' && (
                   <div 
                     style={{...profileCircle, backgroundColor: profile?.role === 'doctor' ? '#a7c9b0' : '#ffb7c5'}} 
                     onClick={() => navigate('/profil')}
+                    title="Profilul meu"
                   >
                     {profile?.full_name?.[0]?.toUpperCase() || 'U'}
                   </div>
@@ -101,15 +113,41 @@ const Header = () => {
   );
 };
 
-// --- STILURI (curățate de badge/notificări) ---
-const headerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 5%', backgroundColor: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255, 183, 197, 0.3)', position: 'sticky', top: 0, zIndex: 1000 };
+// Înlocuiește complet obiectul headerStyle de la finalul fișierului tău Header.tsx cu acesta:
+const headerStyle: React.CSSProperties = { 
+  display: 'flex', 
+  justifyContent: 'space-between', 
+  alignItems: 'center', 
+  
+  // 1. Spatieri interioare elegante (sus-jos / stânga-dreapta)
+  padding: '14px 5%', 
+  backgroundColor: '#ffffff', 
+  borderBottom: '1px solid rgba(255, 183, 197, 0.4)', 
+  boxShadow: '0 4px 12px rgba(255, 183, 197, 0.12)', 
+  
+  // 2. Poziționarea fixă, dar adaptată la containerul paginii
+  position: 'fixed', 
+  top: 0, 
+  left: 0,
+  right: 0,
+  
+  // 3. REPARAREA POTRIVIRII: Folosim 100% în loc de 100vw pentru a respecta marginile ferestrei
+  width: '100%', 
+  
+  // 4. Siguranță pentru straturi
+  zIndex: 999999,    
+  boxSizing: 'border-box' // Forțează browserul să includă padding-ul în lățimea totală, prevenind overflow-ul
+};
 const logoSection: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' };
 const titleStyle: React.CSSProperties = { fontSize: '20px', fontWeight: '800', color: '#4d444a', letterSpacing: '-0.5px' };
 const navStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '20px' };
 const linkStyle: React.CSSProperties = { fontSize: '15px', fontWeight: '600', color: '#8a7d84', cursor: 'pointer' };
 const authBtn: React.CSSProperties = { padding: '10px 25px', backgroundColor: '#ff6b81', color: 'white', border: 'none', borderRadius: '25px', fontWeight: '700', cursor: 'pointer' };
-const adminBtn: React.CSSProperties = { padding: '8px 20px', backgroundColor: '#4d444a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '700', cursor: 'pointer' };
+
+// Buton de panou unificat, modern și elegant
+const panelBtn: React.CSSProperties = { padding: '8px 20px', backgroundColor: '#4d444a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' };
+
 const logoutBtn: React.CSSProperties = { padding: '8px 18px', backgroundColor: 'transparent', color: '#8a7d84', border: '1px solid #e0e0e0', borderRadius: '20px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' };
-const profileCircle: React.CSSProperties = { width: '38px', height: '38px', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer' };
+const profileCircle: React.CSSProperties = { width: '38px', height: '38px', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' };
 
 export default Header;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import SakuraLayout from "../../layouts/SakuraLayout";
@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  ReferenceLine,
 } from "recharts";
 
 // --- INTERFEȚE ---
@@ -91,12 +92,12 @@ export default function PatientStats() {
       result = result.filter((s) => new Date(s.data_finalizare) >= oSaptamanaInUrma);
     }
 
-    // Filtru după Tipul de exercițiu (Cerința profei)
+    // Filtru după Tipul de exercițiu (Suportă acum toate cele 4 tipuri din bază)
     if (filtruExercitiu !== "all") {
       result = result.filter((s) => s.tip_exercitiu === filtruExercitiu);
     }
 
-    // Ordonare cronologică dinamică pentru tabel/liste (implicit cele mai recente sus)
+    // Ordonare cronologică dinamică pentru tabel/liste
     result.sort((a, b) => {
       const timeA = new Date(a.data_finalizare).getTime();
       const timeB = new Date(b.data_finalizare).getTime();
@@ -119,24 +120,75 @@ export default function PatientStats() {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSessions = filteredSessions.slice(indexOfFirstItem, indexOfLastItem);
 
-  // Datele pentru grafic (folosesc ordinea cronologică brută: de la stânga la dreapta)
+  // Datele pentru grafic
   const chartData = allSessions.map((curr, index) => ({
-    index,
+    index: index + 1, 
     scor: curr.scor,
+    tipExercitiu: curr.tip_exercitiu || "Coordonare Forme",
     dataReal: new Date(curr.data_finalizare).toLocaleDateString("ro-RO"),
   }));
 
-  // --- LOGICĂ CORECTATĂ PENTRU MEDIE ȘI BADGE RECUPERARE ---
-  const firstScore = allSessions.length > 0 ? allSessions[0].scor : 0;
-  const lastScore = allSessions.length > 0 ? allSessions[allSessions.length - 1].scor : 0;
-  
-  const totalScoruri = allSessions.reduce((acc, curr) => acc + curr.scor, 0);
-  const medieGlobala = allSessions.length > 0 ? Math.round(totalScoruri / allSessions.length) : 0;
+  // --- CALCUL EVALUȚIE CLINICĂ MEDICAĂ (Abatere Standard & CV) ---
+  const { statusEvolutie, medieGlobalaCalculata } = useMemo(() => {
+    if (allSessions.length === 0) {
+      return { statusEvolutie: { text: "Fără ședințe înregistrate", culoare: "#64748b", bg: "#f1f5f9" }, medieGlobalaCalculata: 0 };
+    }
+    if (allSessions.length < 2) {
+      return { statusEvolutie: { text: "Date insuficiente pentru analiză", culoare: "#64748b", bg: "#f1f5f9" }, medieGlobalaCalculata: allSessions[0].scor };
+    }
 
-  const diff = lastScore - firstScore;
-  const isEvolution = lastScore >= firstScore || medieGlobala >= 60;
+    const scoruri = allSessions.map(s => s.scor);
+    const n = scoruri.length;
+    const medie = scoruri.reduce((a, b) => a + b, 0) / n;
+    
+    const varianta = scoruri.reduce((a, b) => a + Math.pow(b - medie, 2), 0) / n;
+    const abatereStandard = Math.sqrt(varianta);
+    const cv = medie > 0 ? (abatereStandard / medie) * 100 : 0;
 
-  // --- APEL RECONFIGURAT CONTEXT MEDICAL PENTRU ENDPOINT-UL AI ---
+    const ultimeleSesiuni = scoruri.slice(-3);
+    const trendCrescator = ultimeleSesiuni.length >= 2 && ultimeleSesiuni[ultimeleSesiuni.length - 1] > ultimeleSesiuni[0];
+
+    if (cv > 30) {
+      return {
+        statusEvolutie: {
+          text: `Fluctuații Mari (${cv.toFixed(1)}% Coef. Variabilitate)`,
+          culoare: "#c2410c",
+          bg: "#fff7ed"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    if (medie >= 85 && cv <= 12) {
+      return {
+        statusEvolutie: {
+          text: "Stabilizare în Platou Kinetic de Reabilitare",
+          culoare: "#15803d",
+          bg: "#f0fdf4"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    if (trendCrescator) {
+      return {
+        statusEvolutie: {
+          text: `Progres Recent Pozitiv (Medie acuratețe: ${Math.round(medie)}%)`,
+          culoare: "#1d4ed8",
+          bg: "#eff6ff"
+        },
+        medieGlobalaCalculata: Math.round(medie)
+      };
+    }
+    return {
+      statusEvolutie: {
+        text: `Ritm și Evoluție Constantă (${Math.round(medie)}% Acuratețe)`,
+        culoare: "#b91c1c",
+        bg: "#fff5f5"
+      },
+      medieGlobalaCalculata: Math.round(medie)
+    };
+  }, [allSessions]);
+
+  // --- GENERARE RAPORT AI ---
   const generateAiReport = async () => {
     if (allSessions.length === 0) return;
     setIsGeneratingAi(true);
@@ -147,9 +199,7 @@ export default function PatientStats() {
       const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_pacient: id // Trimitem ID-ul în body, forțând backend-ul să aplice formatul academic de medic
-        })
+        body: JSON.stringify({ id_pacient: id })
       });
 
       const data = await res.json();
@@ -194,48 +244,78 @@ export default function PatientStats() {
               </p>
             </div>
 
-            {allSessions.length > 1 && (
+            {allSessions.length > 0 && (
               <div
                 style={{
                   ...trendBadge,
-                  background: isEvolution ? "#e6f7ed" : "#fff3cd",
-                  color: isEvolution ? "#1f7a42" : "#856404",
-                  border: isEvolution ? "1px solid #a3e635" : "1px solid #fef08a"
+                  background: statusEvolutie.bg,
+                  color: statusEvolutie.culoare,
+                  border: `1px solid ${statusEvolutie.culoare}40`
                 }}
               >
-                {diff === 0 && lastScore === 100 
-                  ? "✓ Recuperare Totală Consolidată (100%)" 
-                  : isEvolution 
-                    ? `Evoluție globală: 📈 Progres (+${diff}%)` 
-                    : `Evoluție globală: 📉 Stagnare/Regres (${diff}%)`}
+                📈 Evoluție globală: <strong>{statusEvolutie.text}</strong>
               </div>
             )}
           </div>
 
           {/* Grafic Evolutiv Recharts */}
           <div style={chartContainerStyle}>
-            <div style={{ marginBottom: "15px", color: "#ff8fa3", fontWeight: 800, fontSize: "15px" }}>
-              Analiza Grafică a Scorurilor de Reabilitare
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
+              <div style={{ color: "#4d444a", fontWeight: 800, fontSize: "15px" }}>
+                Analiza Mișcării și Evoluția Acurateții per Ședință
+              </div>
+              <div style={{ display: "flex", gap: "15px", fontSize: "11px", fontWeight: 700 }}>
+                <span style={{ color: "#16a34a" }}>● Exc. Motorie (≥80%)</span>
+                <span style={{ color: "#d97706" }}>● Target Mediu (50-80%)</span>
+                <span style={{ color: "#dc2626" }}>● Deficit Fin (&lt;50%)</span>
+              </div>
             </div>
+
             <ResponsiveContainer width="100%" height="85%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#fff0f3" />
-                <XAxis dataKey="index" hide />
-                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "#8a7d84", fontSize: 12 }} />
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="index" tick={{ fill: "#8a7d84", fontSize: 11, fontWeight: 600 }} tickLine={false} />
+                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "#8a7d84", fontSize: 12, fontWeight: 600 }} />
+                
                 <Tooltip
-                  contentStyle={{ borderRadius: "12px", border: "1px solid #ffeef2", boxShadow: "0 4px 12px rgba(0,0,0,0.02)" }}
-                  formatter={(value: unknown, _name: unknown, item: unknown) => {
-                    const payload = (item as { payload?: { dataReal: string } })?.payload;
-                    return [`${value}% Acuratețe`, `Data: ${payload?.dataReal ?? "N/A"}`];
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div style={{ backgroundColor: "#ffffff", padding: "12px 16px", borderRadius: "16px", border: "1px solid #ffdae1", boxShadow: "0 10px 25px rgba(255, 143, 163, 0.15)" }}>
+                          <p style={{ margin: "0 0 4px 0", fontSize: "11px", fontWeight: 800, color: "#ff8fa3", textTransform: "uppercase" }}>Ședința #{data.index}</p>
+                          <p style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 800, color: "#4d444a" }}>{data.tipExercitiu}</p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", fontWeight: 700 }}>
+                            <span style={{ color: data.scor >= 80 ? "#16a34a" : data.scor >= 50 ? "#d97706" : "#dc2626" }}>Scor: {data.scor}%</span>
+                            <span style={{ color: "#8a7d84", fontWeight: 500 }}>| {data.dataReal}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
+
+                {allSessions.length > 0 && (
+                  <ReferenceLine 
+                    y={medieGlobalaCalculata} 
+                    stroke="#ff8fa3" 
+                    strokeDasharray="5 5" 
+                    strokeWidth={2}
+                    label={{ value: `Medie: ${medieGlobalaCalculata}%`, fill: "#ff8fa3", position: "insideTopLeft", fontSize: 12, fontWeight: 800 }} 
+                  />
+                )}
+
+                <ReferenceLine y={80} stroke="#16a34a" strokeDasharray="3 3" opacity={0.4} />
+                <ReferenceLine y={50} stroke="#dc2626" strokeDasharray="3 3" opacity={0.4} />
+
                 <Line
                   type="monotone"
                   dataKey="scor"
                   stroke="#ff8fa3"
-                  strokeWidth={4}
-                  dot={{ r: 5, fill: "#ff8fa3", strokeWidth: 2 }}
-                  activeDot={{ r: 7 }}
+                  strokeWidth={4.5}
+                  dot={{ r: 5, fill: "#ff8fa3", strokeWidth: 2, stroke: "#ffffff" }}
+                  activeDot={{ r: 8, strokeWidth: 0, fill: "#4f46e5" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -259,25 +339,22 @@ export default function PatientStats() {
             <div style={filterHeaderStyle}>
               <h3 style={{ margin: 0, color: "#4d444a", fontWeight: 800 }}>Istoric Ședințe Monitorizate</h3>
 
-              {/* Panou de selectoare pentru filtre avansate */}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                
-                {/* Filtru Tip Interval */}
                 <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} style={filterSelectStyle}>
                   <option value="toate">Toate perioadele</option>
                   <option value="peste80">Scor bun (Acuratețe ≥ 80%)</option>
                   <option value="recente">Ultima săptămână</option>
                 </select>
 
-                {/* Filtru Exercițiu */}
+                {/* REPARAT: Selectorul conține acum toate cele 4 exerciții din SakuraMotion */}
                 <select value={filtruExercitiu} onChange={(e) => setFiltruExercitiu(e.target.value)} style={filterSelectStyle}>
                   <option value="all">Toate tipurile de exerciții</option>
                   <option value="Coordonare Forme">Coordonare Forme</option>
-                  <option value="Urmărire Traseu">Urmărire Traseu</option>
-                  <option value="Flexie Degete">Flexie Degete</option>
+                  <option value="Urmărire Traseu Labirint">Urmărire Traseu Labirint</option>
+                  <option value="Asamblare Cinematică Floare Sakura">Asamblare Cinematică Floare Sakura</option>
+                  <option value="Prindere Obiecte Virtuale">Prindere Obiecte Virtuale</option>
                 </select>
 
-                {/* Ordonare Dată */}
                 <select value={ordonareData} onChange={(e) => setOrdonareData(e.target.value as any)} style={filterSelectStyle}>
                   <option value="desc">Cele mai recente în top</option>
                   <option value="asc">Cele mai vechi în top</option>
@@ -287,7 +364,7 @@ export default function PatientStats() {
 
             {/* Rândurile cu Sesiuni */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {currentSessions.map((s, i) => (
+              {currentSessions.map((s) => (
                 <div key={s.id} style={sessionRowStyle}>
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                     <span style={{ fontWeight: 800, color: "#4d444a" }}>
@@ -310,7 +387,7 @@ export default function PatientStats() {
               )}
             </div>
 
-            {/* Controale Paginare (1...X) */}
+            {/* Controale Paginare */}
             {totalPages > 1 && (
               <div style={paginationContainer}>
                 <button disabled={paginaSigura === 1} onClick={() => setCurrentPage((p) => p - 1)} style={pageBtn}>
@@ -351,17 +428,18 @@ const headerStyle: React.CSSProperties = {
   marginBottom: "25px",
 };
 const trendBadge: React.CSSProperties = {
-  padding: "8px 16px",
+  padding: "10px 20px",
   borderRadius: "12px",
   fontWeight: 800,
   fontSize: "13px",
+  transition: "all 0.3s ease"
 };
 const chartContainerStyle: React.CSSProperties = {
   background: "white",
   padding: "25px",
   borderRadius: "24px",
   border: "1px solid #ffeef2",
-  height: "340px",
+  height: "360px",
   marginBottom: "30px",
 };
 const aiPanelStyle: React.CSSProperties = {
@@ -387,7 +465,9 @@ const aiContentStyle: React.CSSProperties = {
   border: "1px solid #ffeef2",
   fontSize: "14px",
   color: "#4d444a",
-  lineHeight: "1.6"
+  lineHeight: "1.7",
+  whiteSpace: "pre-line",
+  wordBreak: "break-word"
 };
 const filterHeaderStyle: React.CSSProperties = {
   display: "flex",
