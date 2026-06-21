@@ -9823,7 +9823,7 @@ export default function ProgressPage() {
   };
 
   // --- COD ASINCRON ABSOLUT CORECT ȘI SINCRONIZAT PE ID CU SERVERUL ---
-  const genereazaRaportAI = async () => {
+  const genereazaRaportPacient = async () => {
     if (rawData.length === 0) return;
     setLoadingAI(true);
     setAnalizaAI("");
@@ -9831,14 +9831,16 @@ export default function ProgressPage() {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const { data: { user } } = await supabase.auth.getUser();
 
-      const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
+     
+      const res = await fetch(`${API_URL}/api/exercises/analiza-pacient`, { // <-- Modificat aici din raport-pacient în analiza-pacient
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id_pacient: user?.id, // Sincronizat perfect în 'id_pacient'
+          id_pacient: user?.id, 
           pacientNume: String(userNume)
         })
       });
+      
 
       const data = await res.json();
       if (res.ok && data.success) {
@@ -9973,7 +9975,7 @@ export default function ProgressPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
               <h3 style={{ color: '#ff8fa3', margin: 0, fontSize: '18px', fontWeight: 800 }}>Progres Acuratețe (%)</h3>
               {rawData.length > 0 && (
-                <button onClick={genereazaRaportAI} disabled={loadingAI} style={aiTriggerBtnStyle}>
+                <button onClick={genereazaRaportPacient} disabled={loadingAI} style={aiTriggerBtnStyle}>
                   {loadingAI ? '🌸 Se analizează...' : '✨ Interpretare Clinică AI'}
                 </button>
               )}
@@ -10686,7 +10688,7 @@ const Login = () => {
       <div style={containerStyle}>
         <div style={cardStyle}>
           <div style={{ fontSize: '50px', marginBottom: '10px' }}>🌸</div>
-          <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#4d444a', margin: '0 0 10px 0' }}>Neuro.Rebirth</h2>
+          <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#4d444a', margin: '0 0 10px 0' }}>SakuraMotion</h2>
           <p style={{ color: '#8a7d84', marginBottom: '35px' }}>Conectare la contul tău</p>
 
           <form onSubmit={handleLogin} style={formStyle}>
@@ -11342,6 +11344,7 @@ export default defineConfig({
 {
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.1"
   }
 }
@@ -11671,7 +11674,7 @@ PORT=5000
 SUPABASE_URL=https://nxqtbtqfplfcvdhimxat.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54cXRidHFmcGxmY3ZkaGlteGF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwODk1MjEsImV4cCI6MjA4NjY2NTUyMX0.VkcAqhytOw0WZ_Txr7aIU2jJoYDaWQXr_sRP_T_llg4
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_MIaBQSxejaB2mYSBqc7XlQ_0kVjqyMj
-GEMINI_MODEL=gemini-1.5-flash-latest
+GEMINI_MODEL=gemini-2.5-flash
 GEMINI_API_KEY=AIzaSyAmloPx-cgBnBas-s3zBcE76ILGpDS8Duk
 </file>
 
@@ -12503,186 +12506,104 @@ export const proceseazaMesaj = async (req: Request, res: Response) => {
 <file path="server/src/controllers/exerciseController.ts">
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').replace(/^models\//, '');
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-// =========================================================================
-// FUNCȚIA 1: Procesare și Salvare Sesiune Nouă (Cea apelată după exercițiu)
-// =========================================================================
 export const proceseazaExercitiu = async (req: Request, res: Response) => {
   const { id_pacient, tip_exercitiu, scor, durata_secunde } = req.body;
   try {
-    if (scor !== undefined && scor !== null) {
-      console.log("🌸 [BACKEND] Salvare sesiune nouă pentru pacientul:", id_pacient);
-      const { error } = await supabase
-        .from('progres_pacienti')
-        .insert([{ 
-            id_pacient: id_pacient, 
-            tip_exercitiu: tip_exercitiu || "Coordonare Forme", 
-            scor: Number(scor),
-            durata_secunde: Number(durata_secunde) || 0,
-            data_finalizare: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-      return res.json({ success: true, message: "Sesiune salvată cu succes!" });
-    }
-    return res.json({ success: true, message: "Date recepționate (live streaming)" });
+    await supabase.from('progres_pacienti').insert([{ 
+        id_pacient, tip_exercitiu, scor, durata_secunde, data_finalizare: new Date().toISOString() 
+    }]);
+    res.json({ success: true });
   } catch (error: any) {
-    console.error("❌ Eroare la salvarea exercițiului:", error.message);
-    res.status(500).json({ error: "Eroare internă la salvarea datelor." });
+    res.status(500).json({ error: error.message });
   }
 };
 
-// =========================================================================
-// FUNCȚIA 2: Preluare Istoric General (Cea pe care o căuta ruta și dădea eroare)
-// =========================================================================
 export const getIstoricPacient = async (req: Request, res: Response) => {
-    const { id_pacient } = req.params;
-    try {
-        console.log("🌸 [BACKEND] Preluare istoric pentru pacientul:", id_pacient);
-        const { data, error } = await supabase
-            .from('progres_pacienti')
-            .select('*')
-            .eq('id_pacient', id_pacient)
-            .order('data_finalizare', { ascending: true });
-
-        if (error) throw error;
-        res.json(data);
-    } catch (error: any) {
-        console.error("❌ Eroare la returnarea istoricului:", error.message);
-        res.status(500).json({ error: error.message });
-    }
+  const { id_pacient } = req.params;
+  const { data } = await supabase.from('progres_pacienti').select('*').eq('id_pacient', id_pacient).order('data_finalizare');
+  res.json(data);
 };
 
-// =========================================================================
-// FUNCȚIA 3: Evaluare AI Indestructibilă (Separare Pacient / Medic)
-// =========================================================================
 export const genereazaRezumatMedical = async (req: Request, res: Response) => {
-  let idCautat = req.body.id_pacient || req.body.pacientId || req.body.id;
-  const { pacientNume } = req.body;
+  const { id_pacient } = req.body;
   
-  // SEPARARE INFALIBILĂ: Dacă frontend-ul trimite parametrul 'pacientNume', înseamnă 100% că apelul vine de la ProgressPage (Pacient)
-  const esteMedic = pacientNume ? false : true;
-
-  console.log(`\n========== SakuraMotion AI LOG ==========`);
-  console.log(`👤 Nume pacient primit în body: ${pacientNume || 'Nespecificat (Apel din panou medic)'}`);
-  console.log(`🌸 [CONTEXT DETECTAT]: ${esteMedic ? 'MEDIC 👨‍⚕️' : 'PACIENT 👤'}`);
-  console.log(`=========================================\n`);
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ success: false, error: "Cheia API Gemini lipsește pe server." });
+  }
 
   try {
-    if (!idCautat) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) idCautat = user.id;
-    }
-
-    if (!idCautat) {
-      return res.status(400).json({ success: false, error: "Nu s-a putut mapa un ID de pacient valid." });
-    }
-
-    // Extragem istoricul complet din tabelă
     const { data: sesiuni, error } = await supabase
       .from('progres_pacienti')
-      .select('scor, tip_exercitiu, data_finalizare')
-      .eq('id_pacient', idCautat)
+      .select('scor, data_finalizare')
+      .eq('id_pacient', id_pacient)
       .order('data_finalizare', { ascending: true });
 
     if (error) throw error;
+    if (!sesiuni || sesiuni.length === 0) throw new Error("Nu există sesiuni.");
 
-    if (!sesiuni || sesiuni.length === 0) {
-      return res.json({ 
-        success: true, 
-        rezumat: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză.",
-        analysis: "Nu s-au identificat exerciții finalizate în istoric pentru a genera o analiză."
-      });
-    }
+   
+    const ultimeleSesiuni = sesiuni.slice(-100);
+    const dateEvolutie = ultimeleSesiuni.map(s => `${s.scor}%`).join(', ');
 
-    const normalizeExerciseName = (value: string) =>
-      value
-        .normalize('NFD')
-        .replace(/\p{Diacritic}/gu, '')
-        .toLowerCase()
-        .trim();
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = `Ești un terapeut în kinetoterapie. Analizează scorurile pacientului din ultimele sesiuni: ${dateEvolutie}. 
+    Evaluează progresul (creștere, stagnare sau scădere) și oferă o recomandare clinică scurtă în limba română.`;
 
-    const sesiuniOrdinate = [...sesiuni].sort((a, b) => new Date(a.data_finalizare).getTime() - new Date(b.data_finalizare).getTime());
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
 
-    const gruparePeExercitii = sesiuniOrdinate.reduce<Record<string, { nume: string; intrari: typeof sesiuniOrdinate }>>((acc, sesiune) => {
-      const cheie = normalizeExerciseName(sesiune.tip_exercitiu || 'Exercițiu');
-      if (!acc[cheie]) {
-        acc[cheie] = { nume: sesiune.tip_exercitiu || 'Exercițiu', intrari: [] };
-      }
-      acc[cheie].intrari.push(sesiune);
-      return acc;
-    }, {});
+    res.json({ success: true, analysis: text });
+  } catch (err: any) {
+    console.error("EROARE BACKEND AI:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+export const genereazaRaportPacient = async (req: Request, res: Response) => {
+  const { id_pacient } = req.body;
+  
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ success: false, error: "Cheia API Gemini lipsește pe server." });
+  }
 
-    const dateEvolutie = Object.values(gruparePeExercitii)
-      .map((grup) => {
-        const secventa = grup.intrari
-          .map((item) => `[${new Date(item.data_finalizare).toLocaleString('ro-RO')}]: ${item.scor}%`)
-          .join(' ➔ ');
+  try {
+    const { data: sesiuni, error } = await supabase
+      .from('progres_pacienti')
+      .select('scor, data_finalizare')
+      .eq('id_pacient', id_pacient)
+      .order('data_finalizare', { ascending: true });
 
-        return `EXERCIȚIU: ${grup.nume}\nCronologie scoruri: ${secventa}`;
-      })
-      .join('\n\n');
+    if (error) throw error;
+    if (!sesiuni || sesiuni.length === 0) throw new Error("Nu există sesiuni înregistrate.");
 
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ success: false, error: 'Cheia GEMINI_API_KEY nu este configurată în .env.' });
-    }
+    // Luăm ultimele sesiuni pentru context
+    const ultimeleSesiuni = sesiuni.slice(-100);
+    const dateEvolutie = ultimeleSesiuni.map(s => `${s.scor}%`).join(', ');
 
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-    const prompt = `Ești un analist de date medicale. Sarcina ta este să identifici perioadele de progres și regres din istoricul pacientului.
-Respectă aceste reguli:
-- PROGRES = scorul crește între două momente;
-- REGRES = scorul scade între două momente;
-- STABILIZARE = scorul rămâne identic.
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    // --- PROMPTUL PERSONALIZAT PENTRU PACIENT ---
+    const prompt = `Ești un asistent virtual empatic și cald, specializat în suport pentru recuperare medicală la domiciliu. 
+    Analizează istoricul recent al scorurilor obținute de pacient la exerciții: ${dateEvolutie}.
+    
+    Generează un raport în limba română special pentru PACIENT, respectând următoarele reguli:
+    1. Folosește un ton cald, prietenos, optimist și foarte încurajator (vorbește direct cu pacientul).
+    2. Nu folosi jargon medical complicat sau termeni clinici rigizi. Explică totul simplu.
+    3. Structurează răspunsul în 3 secțiuni clare, folosind titluri cu buline sau bold:
+       - **Cum te-ai descurcat recent:** (O interpretare simplă a evoluției scorurilor, lăudând efortul dacă scorurile sunt mari sau oferind sprijin moral dacă au fost scăderi/fluctuații).
+       - **Ce înseamnă acest lucru pentru tine:** (Explică-i de ce contează constanța, de exemplu: că mușchii sau articulațiile se obișnuiesc cu mișcarea corectă).
+       - **Sfatul meu pentru acasă:** (O recomandare simplă, practică și sigură pentru următoarea perioadă, cum ar fi pauze scurte, hidratare sau continuarea exercițiilor în ritm propriu).`;
 
-Redactează răspunsul sub titlul "[PERIOADE DE PROGRES / REGRES PE EXERCIȚIU]".
-Pentru fiecare exercițiu, scrie o singură frază clară, în limba română, de tipul:
-"• [Nume Exercițiu]: Trend general de [Progres/Regres/Stabilizare], pornind de la X% și ajungând la Y%. Cea mai mare creștere a fost între [Data A] și [Data B], iar o scădere a apărut între [Data C] și [Data D]."
-Omite partea de scădere dacă nu există.
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
 
-Datele pacientului:
-${dateEvolutie}`;
-
-    const geminiResponse = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        generationConfig: {
-          temperature: 0.2,
-          topK: 20,
-          topP: 0.8,
-          maxOutputTokens: 260
-        },
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
-
-    const rawText = await geminiResponse.text();
-    let aiData: any = {};
-
-    try {
-      aiData = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      throw new Error(`Răspuns invalid de la Gemini API: ${rawText || 'corp gol'}`);
-    }
-
-    if (!geminiResponse.ok) {
-      throw new Error(aiData.error?.message || `Eroare Gemini API (${geminiResponse.status}): ${rawText || 'răspuns gol'}`);
-    }
-
-    const textFinal = aiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Raportul AI nu a putut fi generat momentan.';
-
-    return res.json({ 
-      success: true, 
-      rezumat: textFinal,
-      analysis: textFinal 
-    });
-
-  } catch (error: any) {
-    console.error("❌ [CRITICAL AI ERROR]:", error.message || error);
-    return res.status(500).json({ success: false, error: "Eroare la procesarea modulului statistic AI." });
+    res.json({ success: true, analysis: text });
+  } catch (err: any) {
+    console.error("EROARE BACKEND RAPORT PACIENT:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 </file>
@@ -12817,18 +12738,15 @@ export default router;
 </file>
 
 <file path="server/src/routes/exerciseRoutes.ts">
-import { Router, Request, Response } from 'express';
-import { proceseazaExercitiu, getIstoricPacient, genereazaRezumatMedical } from '../controllers/exerciseController.js';
+import { Router } from 'express';
+import { proceseazaExercitiu, getIstoricPacient, genereazaRezumatMedical, genereazaRaportPacient } from '../controllers/exerciseController.js';
 
 const router = Router();
 
-// 1. Rutele tale standard pentru salvare și istoric grafic
 router.post('/proceseaza', proceseazaExercitiu);
 router.get('/istoric/:id_pacient', getIstoricPacient);
-
-// 2. RUTA CRITICĂ UNIFICATĂ PENTRU ANALIZA AI
-// Mapăm direct /analiza-ai către funcția din controller pe care am scris-o completă
 router.post('/analiza-ai', genereazaRezumatMedical);
+router.post('/analiza-pacient', genereazaRaportPacient);
 
 export default router;
 </file>

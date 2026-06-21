@@ -170,7 +170,7 @@ export default function ProgressPage() {
   };
 
   // --- COD ASINCRON ABSOLUT CORECT ȘI SINCRONIZAT PE ID CU SERVERUL ---
-  const genereazaRaportAI = async () => {
+  const genereazaRaportPacient = async () => {
     if (rawData.length === 0) return;
     setLoadingAI(true);
     setAnalizaAI("");
@@ -178,14 +178,16 @@ export default function ProgressPage() {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const { data: { user } } = await supabase.auth.getUser();
 
-      const res = await fetch(`${API_URL}/api/exercises/analiza-ai`, {
+     
+      const res = await fetch(`${API_URL}/api/exercises/analiza-pacient`, { // <-- Modificat aici din raport-pacient în analiza-pacient
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id_pacient: user?.id, // Sincronizat perfect în 'id_pacient'
+          id_pacient: user?.id, 
           pacientNume: String(userNume)
         })
       });
+      
 
       const data = await res.json();
       if (res.ok && data.success) {
@@ -320,7 +322,7 @@ export default function ProgressPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
               <h3 style={{ color: '#ff8fa3', margin: 0, fontSize: '18px', fontWeight: 800 }}>Progres Acuratețe (%)</h3>
               {rawData.length > 0 && (
-                <button onClick={genereazaRaportAI} disabled={loadingAI} style={aiTriggerBtnStyle}>
+                <button onClick={genereazaRaportPacient} disabled={loadingAI} style={aiTriggerBtnStyle}>
                   {loadingAI ? '🌸 Se analizează...' : '✨ Interpretare Clinică AI'}
                 </button>
               )}
@@ -353,7 +355,7 @@ export default function ProgressPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
                   <span style={{ fontSize: '18px' }}>🌸</span>
                   <div>
-                    <div style={{ fontWeight: 900, color: '#ff8fa3', fontSize: '14px' }}>Raport clar și ușor de citit</div>
+                    <div style={{ fontWeight: 900, color: '#ff8fa3', fontSize: '14px' }}>Raport Inteligență Artificială</div>
                     <div style={{ fontSize: '12px', color: '#8a7d84', fontWeight: 600 }}>Rezumatul AI este prezentat în secțiuni simple, pentru o înțelegere rapidă.</div>
                   </div>
                 </div>

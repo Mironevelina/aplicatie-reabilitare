@@ -18,7 +18,7 @@ const Home = () => {
           
           {/* BADGE PRINCIPAL - Tehnic și profesional */}
           <div style={topBadgeStyle}>
-            💻 PLATFORMĂ DIGITALĂ PENTRU KINETOTERAPIE
+             PLATFORMĂ DIGITALĂ PENTRU KINETOTERAPIE
           </div>
           
           {/* TITLU - Schimbat din metafore în scopul real al aplicației */}

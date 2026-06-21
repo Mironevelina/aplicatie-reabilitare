@@ -74,7 +74,7 @@ const Login = () => {
       <div style={containerStyle}>
         <div style={cardStyle}>
           <div style={{ fontSize: '50px', marginBottom: '10px' }}>🌸</div>
-          <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#4d444a', margin: '0 0 10px 0' }}>Neuro.Rebirth</h2>
+          <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#4d444a', margin: '0 0 10px 0' }}>SakuraMotion</h2>
           <p style={{ color: '#8a7d84', marginBottom: '35px' }}>Conectare la contul tău</p>
 
           <form onSubmit={handleLogin} style={formStyle}>
