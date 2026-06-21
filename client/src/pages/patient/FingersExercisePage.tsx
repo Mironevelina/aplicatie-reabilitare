@@ -1,6 +1,5 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Hands } from "@mediapipe/hands";
-import type { LandmarkList } from "@mediapipe/hands";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import SakuraLayout from '../../layouts/SakuraLayout';
@@ -16,11 +15,6 @@ interface Petal {
   angle: number; 
   radius: number; 
   atasata: boolean;
-}
-
-interface MediaPipeResults {
-  multiHandLandmarks: LandmarkList[];
-  image: HTMLVideoElement;
 }
 
 export function FingersExercisePage() {
@@ -215,7 +209,7 @@ export function FingersExercisePage() {
 
         handsRef.current = handsInstance;
 
-        handsInstance.onResults((results: MediaPipeResults) => {
+        handsInstance.onResults((results) => {
           if (!active || isFinishedRef.current || !cameraActiveRef.current) return;
 
           const canvas = canvasRef.current;

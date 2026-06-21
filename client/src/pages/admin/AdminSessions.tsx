@@ -119,4 +119,3 @@ const scoreBadge = (score: number): CSSProperties => ({
 
 const scoreLabel: CSSProperties = { fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600, marginTop: '-4px' };
 const statusMessage: CSSProperties = { textAlign: 'center', padding: '40px', color: '#64748b', fontWeight: 600 };
-const centeredStyle: CSSProperties = { textAlign: 'center', padding: '100px', color: '#64748b', fontWeight: 900 };

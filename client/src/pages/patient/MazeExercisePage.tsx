@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import SakuraLayout from '../../layouts/SakuraLayout';

@@ -1,10 +1,9 @@
-import React, { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Hands, HAND_CONNECTIONS } from "@mediapipe/hands";
 import { drawConnectors } from "@mediapipe/drawing_utils";
 import { supabase } from "../../supabaseClient";
 import SakuraLayout from "../../layouts/SakuraLayout";
-import type { CSSProperties } from "react";
 
 interface HandData {
   pinch: boolean;
