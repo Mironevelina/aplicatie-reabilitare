@@ -1,0 +1,21 @@
+services:
+  server:
+    build:
+      context: ./server
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/example.env
+    environment:
+      PORT: 5000
+      CLIENT_ORIGIN: http://localhost:8080
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: http://localhost:5000
+    ports:
+      - "8080:80"
+    depends_on:
+      - server

@@ -30,7 +30,7 @@ const ProfilePage = () => {
           const tableName =
             role === "doctor" || role === "medic" ? "doctori" : "pacienti";
 
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from(tableName)
             .select("*")
             .eq("id", user.id)
